@@ -146,6 +146,7 @@ export const getMyRequests = async (userId) => {
         estado, 
         fecha_factura, 
         zona,
+        motivo_rechazo,
         aprobador:usuario_id ( nombre_completo )
       `)
       .eq('transportista_id', userId)
@@ -172,7 +173,8 @@ export const getPendingApprovals = async (approverId) => {
         *,
         transportista:transportistas!solicitudes_gastos_transportista_id_fkey ( razon_social, ruc ),
         vehiculo:vehiculos!solicitudes_gastos_vehiculo_id_fkey ( placa, capacidad_m3 ),
-        area:maestro_areas!solicitudes_gastos_area_atribuible_id_fkey ( nombre )
+        area:maestro_areas!solicitudes_gastos_area_atribuible_id_fkey ( nombre ),
+        destinatario:destinatarios ( codigo_destinatario, nombre_destinatario, canal )
       `)
       .eq('usuario_id', approverId)
       .eq('estado', 'pendiente')
@@ -186,7 +188,11 @@ export const getPendingApprovals = async (approverId) => {
       ruc_transportista: item.transportista?.ruc || 'S/N',
       placa_vehiculo: item.vehiculo?.placa || '---',
       capacidad_vehiculo: item.vehiculo?.capacidad_m3 || 0,
-      nombre_area: item.area?.nombre || 'No asignada' 
+      nombre_area: item.area?.nombre || 'No asignada',
+      // Mapeo de datos del cliente
+      codigo_cliente: item.destinatario?.codigo_destinatario || '---',
+      nombre_cliente: item.destinatario?.nombre_destinatario || 'Cliente Desconocido',
+      canal_cliente: item.destinatario?.canal || '---'
     }));
 
   } catch (error) {
@@ -195,14 +201,21 @@ export const getPendingApprovals = async (approverId) => {
   }
 };
 
-export const updateRequestStatus = async (requestId, newStatus) => {
+export const updateRequestStatus = async (requestId, newStatus, rejectionReason = null) => {
   try {
+    const updateData = { 
+      estado: newStatus,
+      updated_at: new Date().toISOString() 
+    };
+
+    // Si hay un motivo de rechazo, lo agregamos al update
+    if (rejectionReason) {
+      updateData.motivo_rechazo = rejectionReason;
+    }
+
     const { error } = await supabase
       .from('solicitudes_gastos')
-      .update({ 
-        estado: newStatus,
-        updated_at: new Date().toISOString() 
-      })
+      .update(updateData)
       .eq('id', requestId);
 
     if (error) throw error;

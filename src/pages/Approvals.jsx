@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { 
-  CheckCircle, XCircle, Clock, MapPin, Calendar, AlertTriangle, 
-  Building2, Truck, Info, Tag, FileText, DollarSign 
+  CheckCircle, XCircle, Clock, MapPin, AlertTriangle, 
+  Truck, Info, Tag, FileText, Store, User
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getPendingApprovals, updateRequestStatus } from '../services/requests';
@@ -15,13 +15,14 @@ export default function Approvals() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   
+  // Estados para el rechazo
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     if (user) {
       loadData(true);
-      // Auto-refrescar al volver a la pestaña
       const handleFocus = () => loadData(false);
       window.addEventListener('focus', handleFocus);
       return () => window.removeEventListener('focus', handleFocus);
@@ -45,18 +46,24 @@ export default function Approvals() {
     if (action === 'approve') {
       await processUpdate(id, 'aprobado');
     } else {
+      // Preparar modal de rechazo
       setSelectedRequestId(id);
+      setRejectionReason(''); // Limpiar motivo anterior
       setIsRejectModalOpen(true);
     }
   };
 
   const processUpdate = async (id, status) => {
     try {
-      await updateRequestStatus(id, status);
+      // Si es rechazo, enviamos el motivo. Si es aprobación, enviamos null.
+      const reasonToSend = status === 'rechazado' ? rejectionReason : null;
+
+      await updateRequestStatus(id, status, reasonToSend);
+      
       toast.success(status === 'aprobado' ? 'Solicitud Aprobada ✅' : 'Solicitud Rechazada ❌');
       setIsRejectModalOpen(false);
       
-      // Actualizar lista localmente para que sea instantáneo
+      // Actualizar lista localmente
       setRequests(prev => prev.filter(r => r.id !== id));
       
     } catch (error) {
@@ -93,7 +100,7 @@ export default function Approvals() {
           </div>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">¡Todo al día!</h3>
           <p className="text-gray-500 max-w-sm mx-auto">
-            No tienes solicitudes pendientes por aprobar en este momento. Buen trabajo.
+            No tienes solicitudes pendientes por aprobar en este momento.
           </p>
         </div>
       ) : (
@@ -104,16 +111,45 @@ export default function Approvals() {
         </div>
       )}
 
-      {/* Modal de Rechazo (Usa tu componente Modal mejorado) */}
+      {/* Modal de Rechazo CON FORMULARIO OBLIGATORIO */}
       <Modal 
         isOpen={isRejectModalOpen}
         onClose={() => setIsRejectModalOpen(false)}
-        onConfirm={() => processUpdate(selectedRequestId, 'rechazado')}
-        title="¿Rechazar solicitud?"
-        message="Esta acción notificará al transportista que su gasto ha sido denegado. Esta acción no se puede deshacer."
-        confirmText="Sí, Rechazar Gasto"
-        variant="danger"
-      />
+        title="Rechazar Solicitud"
+      >
+        <div className="space-y-4">
+            <div className="bg-red-50 p-3 rounded-lg flex items-start gap-3 text-sm text-red-800 border border-red-100">
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <p>
+                    Estás a punto de denegar este gasto. Por favor, indica el motivo para notificar al transportista.
+                </p>
+            </div>
+            
+            <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">
+                    Motivo del rechazo <span className="text-red-500">*</span>
+                </label>
+                <textarea 
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none resize-none"
+                    rows="3"
+                    placeholder="Ej. La tarifa no coincide con el contrato... / Falta evidencia..."
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setIsRejectModalOpen(false)}>Cancelar</Button>
+                <Button 
+                    onClick={() => processUpdate(selectedRequestId, 'rechazado')}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    disabled={rejectionReason.trim().length < 5} // Bloqueado si no escribe
+                >
+                    Confirmar Rechazo
+                </Button>
+            </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -124,16 +160,14 @@ function ApprovalCard({ req, onAction }) {
   const capacidad = req.capacidad_vehiculo || 0;
   const fecha = new Date(req.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  // Determinar color según tipo de gasto
   const isFF = req.tipo_gasto === 'Falso Flete';
   const isCM = req.tipo_gasto === 'Carga < al % mínimo';
-  
   const badgeColor = isFF ? "bg-blue-100 text-blue-800" : isCM ? "bg-purple-100 text-purple-800" : "bg-orange-100 text-orange-800";
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden hover:shadow-lg transition-all duration-300 group">
       
-      {/* Cabecera de la Tarjeta */}
+      {/* Cabecera */}
       <div className="bg-slate-50/80 dark:bg-slate-900/50 px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center">
         <div className="flex items-center gap-4">
           <div className="h-12 w-12 rounded-full bg-white border border-gray-200 text-gray-700 flex items-center justify-center font-bold shadow-sm">
@@ -157,10 +191,10 @@ function ApprovalCard({ req, onAction }) {
         </div>
       </div>
 
-      {/* Cuerpo de la Tarjeta */}
+      {/* Cuerpo */}
       <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
         
-        {/* Columna Izquierda: Detalle Principal */}
+        {/* Columna 1: Detalle del Gasto */}
         <div className="md:col-span-5 space-y-4">
            <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Concepto del Gasto</p>
@@ -170,9 +204,8 @@ function ApprovalCard({ req, onAction }) {
            </div>
 
            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-              {/* Si es Falso Flete */}
               {isFF && (
-                 <div className="space-y-1">
+                 <div className="space-y-1 mb-2">
                     <div className="text-xs text-gray-500 font-bold uppercase">Ruta Reportada</div>
                     <div className="font-medium text-gray-900 flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-brand-500" /> {req.ruta_falso_flete || 'No especificada'}
@@ -180,15 +213,20 @@ function ApprovalCard({ req, onAction }) {
                  </div>
               )}
               
-              {/* Si es Carga Mínima o tiene motivo */}
-              {(req.motivo_gasto && !isFF) && (
-                  <div className="space-y-1">
-                     <div className="text-xs text-gray-500 font-bold uppercase">Motivo / Sustento</div>
-                     <div className="text-sm text-gray-800 italic">"{req.motivo_gasto}"</div>
-                  </div>
-              )}
-              
-              {/* Texto libre de sustento */}
+              {/* === NUEVO: SECCIÓN CLIENTE === */}
+              <div className="space-y-1 mb-2 pt-2 border-t border-gray-200">
+                 <div className="text-xs text-gray-500 font-bold uppercase flex items-center gap-1">
+                    <Store className="w-3 h-3" /> Cliente / Punto de Entrega
+                 </div>
+                 <div className="text-sm font-medium text-gray-900">
+                    {req.codigo_cliente} - {req.nombre_cliente}
+                 </div>
+                 <div className="inline-block text-[10px] font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded border border-brand-100">
+                    {req.canal_cliente}
+                 </div>
+              </div>
+              {/* ============================= */}
+
               {req.sustento_texto && (
                   <div className="mt-2 pt-2 border-t border-gray-200">
                       <p className="text-xs text-gray-500 mb-1">Detalle Adicional:</p>
@@ -198,10 +236,9 @@ function ApprovalCard({ req, onAction }) {
            </div>
         </div>
 
-        {/* Columna Central: Datos Operativos */}
+        {/* Columna 2: Datos Operativos */}
         <div className="md:col-span-4 space-y-4 border-l border-gray-100 pl-0 md:pl-6">
            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Datos Operativos</p>
-           
            <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between">
                  <span className="text-gray-500 flex items-center gap-2"><MapPin className="w-4 h-4" /> Zona</span>
@@ -222,7 +259,7 @@ function ApprovalCard({ req, onAction }) {
            </div>
         </div>
 
-        {/* Columna Derecha: Acciones */}
+        {/* Columna 3: Acciones */}
         <div className="md:col-span-3 flex flex-col justify-center gap-3 border-l border-gray-100 pl-0 md:pl-6">
           <Button 
             onClick={() => onAction(req.id, 'approve')}
@@ -240,20 +277,18 @@ function ApprovalCard({ req, onAction }) {
         </div>
       </div>
 
-      {/* Footer Informativo (Cálculos) */}
+      {/* Footer Informativo */}
       {(isFF || isCM) && (
           <div className="bg-blue-50/50 px-6 py-3 text-xs text-blue-800 flex flex-wrap items-center gap-4 border-t border-blue-100">
              <div className="flex items-center gap-2 font-medium">
                 <Info className="w-4 h-4 text-blue-600" />
                 <span>Cálculo Automático:</span>
              </div>
-             
              <div className="flex gap-4 opacity-80">
                 <span>Vol. Cargado: <strong>{req.volumen_cargado_m3} m³</strong></span>
                 <span>•</span>
                 <span>Tarifa: <strong>S/ {req.precio_unitario}</strong></span>
              </div>
-
              {isCM && (
                  <span className="ml-auto bg-blue-200 text-blue-900 px-2 py-0.5 rounded font-bold uppercase text-[10px]">
                     Cobro por Ocupabilidad ({req.zona === 'Lima' ? '80%' : '85%'})
