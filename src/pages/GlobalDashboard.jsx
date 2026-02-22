@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getDashboardStats } from '../services/dashboard';
+import { getGlobalDashboardStats } from '../services/dashboard';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList 
 } from 'recharts';
-import { DollarSign, FileText, TrendingUp, Calendar } from 'lucide-react';
+import { DollarSign, FileText, TrendingUp, Calendar, LayoutDashboard } from 'lucide-react';
 import { cn } from '../utils/cn';
 
-export default function Dashboard() {
+export default function GlobalDashboard() {
   const { profile } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,12 +18,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     const loadData = async () => {
-      const data = await getDashboardStats();
+      const data = await getGlobalDashboardStats();
       setStats(data);
       setLoading(false);
     };
     loadData();
   }, []);
+
+  // --- ENRUTADOR INTELIGENTE POR ROL ---
+  const userRole = profile?.rol || '';
+  const canSeeGlobalDashboards = ['usuario_pagador', 'usuario_visualizador', 'admin', 'developer'].includes(userRole);
+
+  // Si el usuario no tiene permisos para ver el Global, lo redirigimos a su vista personal.
+  if (profile && !canSeeGlobalDashboards) {
+    return <Navigate to="/dashboard/personal" replace />;
+  }
 
   if (loading) return <div className="p-8 text-center text-gray-500">Cargando métricas...</div>;
 
@@ -32,15 +42,15 @@ export default function Dashboard() {
       {/* 1. Header de Bienvenida */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Hola, {profile?.nombre_completo?.split(' ')[0]} 👋
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <LayoutDashboard className="w-6 h-6 text-brand-600" /> Dashboard Global
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">
-            Aquí tienes el resumen de la operación logística.
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            Hola, {profile?.nombre_completo?.split(' ')[0]} 👋. Aquí tienes el resumen de la operación logística.
           </p>
         </div>
         <div className="bg-white dark:bg-slate-800 px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm text-sm font-medium">
-          📅 Periodo: Febrero 2026
+          📅 Periodo Actual
         </div>
       </div>
 
@@ -77,7 +87,8 @@ export default function Dashboard() {
           <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Distribución de Gastos</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats?.graficos.gastosPorTipo} layout="vertical" margin={{ left: 20 }}>
+              {/* Se añade margen a la derecha para que no se corten los números */}
+              <BarChart data={stats?.graficos.gastosPorTipo} layout="vertical" margin={{ left: 20, right: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
@@ -86,6 +97,15 @@ export default function Dashboard() {
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
+                  {/* Se añade la lista de etiquetas (LabelList) a la derecha de las barras */}
+                  <LabelList 
+                    dataKey="value" 
+                    position="right" 
+                    formatter={(val) => `S/ ${val.toLocaleString('es-PE', { maximumFractionDigits: 0 })}`}
+                    fill="#64748b" 
+                    fontSize={11} 
+                    fontWeight="bold" 
+                  />
                   {stats?.graficos.gastosPorTipo.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
@@ -110,12 +130,12 @@ export default function Dashboard() {
                       {item.tipo_gasto}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {item.fecha_factura || 'Sin fecha'} • {item.estado}
+                      {item.fecha_factura ? new Date(item.fecha_factura + "T00:00:00").toLocaleDateString('es-PE') : 'Sin fecha'} • {item.estado}
                     </p>
                   </div>
                 </div>
                 <span className="font-bold text-gray-900 dark:text-white">
-                  S/ {item.total_gasto?.toLocaleString()}
+                  S/ {item.total_gasto?.toLocaleString('es-PE', {minimumFractionDigits: 2})}
                 </span>
               </div>
             ))}

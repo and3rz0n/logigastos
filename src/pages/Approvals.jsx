@@ -2,37 +2,44 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { 
   CheckCircle, XCircle, Clock, MapPin, AlertTriangle, 
-  Truck, Info, Tag, FileText, Store, User
+  Truck, Info, Tag, FileText, Store, User, Search
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getPendingApprovals, updateRequestStatus } from '../services/requests';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { cn } from '../utils/cn';
 
 export default function Approvals() {
-  const { user } = useAuth();
+  // Ahora traemos 'profile' para saber tu rol exacto (admin/dev o aprobador)
+  const { user, profile } = useAuth(); 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   
+  // Estado para el buscador
+  const [searchTerm, setSearchTerm] = useState("");
+
   // Estados para el rechazo
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
-    if (user) {
+    // Esperamos a que 'profile' esté listo
+    if (profile) {
       loadData(true);
       const handleFocus = () => loadData(false);
       window.addEventListener('focus', handleFocus);
       return () => window.removeEventListener('focus', handleFocus);
     }
-  }, [user]);
+  }, [profile]);
 
   const loadData = async (showLoading) => {
     if (showLoading) setLoading(true);
     try {
-      const data = await getPendingApprovals(user.id);
+      // Le pasamos todo tu perfil para que el servicio sepa si traer todas o solo las tuyas
+      const data = await getPendingApprovals(profile);
       setRequests(data || []);
     } catch (error) {
       console.error(error);
@@ -58,7 +65,8 @@ export default function Approvals() {
       // Si es rechazo, enviamos el motivo. Si es aprobación, enviamos null.
       const reasonToSend = status === 'rechazado' ? rejectionReason : null;
 
-      await updateRequestStatus(id, status, reasonToSend);
+      // ¡NUEVO!: Enviamos 'user.id' para que quede grabado como el RESOLUTOR
+      await updateRequestStatus(id, status, user.id, reasonToSend);
       
       toast.success(status === 'aprobado' ? 'Solicitud Aprobada ✅' : 'Solicitud Rechazada ❌');
       setIsRejectModalOpen(false);
@@ -72,6 +80,14 @@ export default function Approvals() {
     }
   };
 
+  // Lógica de filtrado inteligente
+  const filteredRequests = requests.filter(
+    (req) =>
+      req.nro_transporte_sap?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.nombre_transportista?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.nombre_aprobador_asignado?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading && requests.length === 0) {
     return (
         <div className="max-w-5xl mx-auto p-8 space-y-4">
@@ -84,13 +100,28 @@ export default function Approvals() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-20">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-sans flex items-center gap-2">
-          <CheckCircle className="text-brand-700 w-7 h-7" /> Bandeja de Aprobaciones
-        </h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Tienes <span className="font-bold text-brand-700 text-lg mx-1">{requests.length}</span> solicitudes pendientes de revisión.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-sans flex items-center gap-2">
+            <CheckCircle className="text-brand-700 w-7 h-7" /> Bandeja de Aprobaciones
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            Tienes <span className="font-bold text-brand-700 text-lg mx-1">{requests.length}</span> solicitudes pendientes de revisión.
+          </p>
+        </div>
+        
+        {/* === BUSCADOR SUPERIOR === */}
+        {requests.length > 0 && (
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-3.5 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar por Placa, Picking, Transportista..."
+              className="pl-9 bg-white dark:bg-slate-800"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       {requests.length === 0 ? (
@@ -103,9 +134,13 @@ export default function Approvals() {
             No tienes solicitudes pendientes por aprobar en este momento.
           </p>
         </div>
+      ) : filteredRequests.length === 0 ? (
+        <div className="text-center py-10 text-gray-500">
+            No se encontraron solicitudes que coincidan con tu búsqueda.
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
-          {requests.map((req) => (
+          {filteredRequests.map((req) => (
             <ApprovalCard key={req.id} req={req} onAction={handleAction} />
           ))}
         </div>
@@ -175,9 +210,13 @@ function ApprovalCard({ req, onAction }) {
           </div>
           <div>
             <h3 className="font-bold text-gray-900 dark:text-white text-lg leading-tight">{transportista}</h3>
-            <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+            <div className="text-xs flex flex-wrap items-center gap-2 mt-1">
               <span className="bg-white px-2 py-0.5 rounded border border-gray-200 font-mono font-bold text-gray-700">{placa}</span>
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {fecha}</span>
+              <span className="flex items-center gap-1 text-gray-500"><Clock className="w-3 h-3" /> {fecha}</span>
+              {/* === NUEVO: ETIQUETA DE ASIGNACIÓN === */}
+              <span className="flex items-center gap-1 text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-100 font-medium">
+                  <User className="w-3 h-3" /> Asignado a: {req.nombre_aprobador_asignado}
+              </span>
             </div>
           </div>
         </div>
@@ -213,7 +252,6 @@ function ApprovalCard({ req, onAction }) {
                  </div>
               )}
               
-              {/* === NUEVO: SECCIÓN CLIENTE === */}
               <div className="space-y-1 mb-2 pt-2 border-t border-gray-200">
                  <div className="text-xs text-gray-500 font-bold uppercase flex items-center gap-1">
                     <Store className="w-3 h-3" /> Cliente / Punto de Entrega
@@ -225,7 +263,6 @@ function ApprovalCard({ req, onAction }) {
                     {req.canal_cliente}
                  </div>
               </div>
-              {/* ============================= */}
 
               {req.sustento_texto && (
                   <div className="mt-2 pt-2 border-t border-gray-200">

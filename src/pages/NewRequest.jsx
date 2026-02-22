@@ -3,25 +3,13 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
-  Save,
-  Truck,
-  DollarSign,
-  AlertCircle,
-  Building2,
-  Search,
-  Info,
-  Calculator
+  ArrowLeft, Save, Truck, DollarSign, AlertCircle, Building2, Search, Info, Calculator
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../services/supabase"; 
 import {
-  createRequest,
-  getMasterData,
-  getVehiclesByDriver,
-  getDestinatarioByCode,
-  getApprovers,
-  getTodayPeru, // <--- Nueva utilidad para corregir la fecha
+  createRequest, getMasterData, getVehiclesByDriver, getDestinatarioByCode,
+  getApprovers, getTodayPeru, getSystemConfig, checkDuplicateRequest 
 } from "../services/requests";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -30,6 +18,10 @@ import { cn } from "../utils/cn";
 export default function NewRequest() {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // Estados de configuración y UI
+  const [pickingLength, setPickingLength] = useState(8);
+  const [pickingError, setPickingError] = useState(false); 
 
   const [masters, setMasters] = useState({
     canales: [],
@@ -56,7 +48,7 @@ export default function NewRequest() {
     formState: { isSubmitting },
   } = useForm({
     defaultValues: {
-      fecha: getTodayPeru(), // <--- Ahora inicia siempre con la fecha de Perú
+      fecha: getTodayPeru(),
       zona: "Lima",
     },
   });
@@ -68,29 +60,38 @@ export default function NewRequest() {
   }, [user]);
 
   const cargarDatosIniciales = async () => {
-    const [masterData, vehicleData, approverData] = await Promise.all([
+    const [masterData, vehicleData, approverData, configData] = await Promise.all([
       getMasterData(),
       getVehiclesByDriver(user.id),
       getApprovers(),
+      getSystemConfig() 
     ]);
 
+    if (configData?.longitud_picking) {
+      setPickingLength(configData.longitud_picking);
+    }
+
+    const sortAtoZ = (a, b, key) => (a[key] || '').localeCompare(b[key] || '', 'es');
+
     setMasters({
-        ...masterData,
-        motivosGenerales: masterData.motivos || []
+        canales: (masterData.canales || []).sort((a, b) => sortAtoZ(a, b, 'nombre')),
+        zonas: (masterData.zonas || []).sort((a, b) => sortAtoZ(a, b, 'nombre')),
+        areas: (masterData.areas || []).sort((a, b) => sortAtoZ(a, b, 'nombre')),
+        motivosGenerales: (masterData.motivos || []).sort((a, b) => sortAtoZ(a, b, 'nombre'))
     });
-    setVehicles(vehicleData);
-    setApprovers(approverData);
+    
+    setVehicles((vehicleData || []).sort((a, b) => sortAtoZ(a, b, 'placa')));
+    setApprovers((approverData || []).sort((a, b) => sortAtoZ(a, b, 'nombre_completo')));
 
     const { data: optionsData } = await supabase
       .from('maestros_opciones')
       .select('*')
-      .eq('activo', true)
-      .order('orden', { ascending: true });
+      .eq('activo', true);
     
     if (optionsData) {
       setOpciones({
-        rutasFF: optionsData.filter(o => o.categoria === 'ruta_ff'),
-        motivosCM: optionsData.filter(o => o.categoria === 'motivo_cm')
+        rutasFF: optionsData.filter(o => o.categoria === 'ruta_ff').sort((a, b) => sortAtoZ(a, b, 'etiqueta')),
+        motivosCM: optionsData.filter(o => o.categoria === 'motivo_cm').sort((a, b) => sortAtoZ(a, b, 'etiqueta'))
       });
     }
   };
@@ -129,6 +130,7 @@ export default function NewRequest() {
     setValue("motivo_texto", ""); 
   }, [tipoGasto, setValue]);
 
+  // --- NUEVA LÓGICA DE CÁLCULO DINÁMICO ---
   useEffect(() => {
     if (!vehiculoId || !tipoGasto) return;
     if (["Gasto Adicional", "Zona Rígida", "Último Punto"].includes(tipoGasto)) return;
@@ -149,7 +151,11 @@ export default function NewRequest() {
     }
     else if (tipoGasto === "Carga < al % mínimo") {
       if (capacidad > 0 && tar > 0) {
-        const factor = zona === "Lima" ? 0.8 : 0.85;
+        // BUSCAMOS EL FACTOR DINÁMICO DESDE LA BASE DE DATOS
+        const zonaObj = masters.zonas.find(z => z.nombre === zona);
+        const porcentaje = zonaObj && zonaObj.porcentaje_minimo ? parseFloat(zonaObj.porcentaje_minimo) : 80;
+        const factor = porcentaje / 100; // Ej: 85 -> 0.85
+        
         const volumenMinimoRequerido = capacidad * factor;
         const volumenPagable = volumenMinimoRequerido - vol;
 
@@ -166,7 +172,7 @@ export default function NewRequest() {
     } else {
       setValue("monto", "");
     }
-  }, [tipoGasto, volumen, tarifa, vehiculoId, zona, vehicles, setValue]);
+  }, [tipoGasto, volumen, tarifa, vehiculoId, zona, vehicles, masters.zonas, setValue]);
 
   const renderContextCard = () => {
     if (!tipoGasto) return null;
@@ -178,10 +184,7 @@ export default function NewRequest() {
           <div className="space-y-1">
             <p className="text-sm font-bold text-blue-800">Sobre Falso Flete</p>
             <p className="text-sm text-blue-700">
-              Recuerda: Si el volumen es <strong>&lt; 80%</strong> de la capacidad, registra el valor al 80% como indica tu contrato.
-            </p>
-            <p className="text-sm text-blue-700">
-              Indique el precio por <strong>m³</strong> según contrato para <strong>falsos fletes</strong>.
+              Indique el volumen pactado y el precio por <strong>m³</strong> según contrato para <strong>falsos fletes</strong>.
             </p>
           </div>
         </div>
@@ -203,14 +206,17 @@ export default function NewRequest() {
     }
 
     if (tipoGasto === "Carga < al % mínimo") {
-        const factorTexto = zona === "Lima" ? "80%" : "85%";
+        // MOSTRAMOS EL TEXTO DINÁMICO AL USUARIO
+        const zonaObj = masters.zonas.find(z => z.nombre === zona);
+        const porcentaje = zonaObj && zonaObj.porcentaje_minimo ? zonaObj.porcentaje_minimo : 80;
+        
         return (
           <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex gap-3 animate-in fade-in">
             <Calculator className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="text-sm font-bold text-purple-800">Cálculo Automático ({zona})</p>
               <p className="text-sm text-purple-700">
-                Se aplicará la fórmula según contrato ({factorTexto}):
+                Se aplicará la fórmula según contrato ({porcentaje}%):
                 <br/>
                 <code className="bg-purple-100 px-1 py-0.5 rounded text-xs font-mono font-bold">
                   (Vol. Mínimo - Vol. Cargado) x Tarifa
@@ -231,17 +237,54 @@ export default function NewRequest() {
         return;
       }
 
+      if (data.nro_transporte.length !== pickingLength) {
+        setPickingError(true);
+        toast.error(`El N° de Transporte (Picking) debe tener exactamente ${pickingLength} dígitos.`);
+        return;
+      }
+
       if (data.tipo_gasto === "Carga < al % mínimo" && (!data.monto || parseFloat(data.monto) <= 0)) {
         toast.error("El volumen cargado supera el mínimo. No aplica cobro.");
         return;
+      }
+
+      const motivoFinal = data.motivo_gasto || data.motivo_texto || data.sustento || "";
+      const isDuplicate = await checkDuplicateRequest(user.id, data.nro_transporte, data.tipo_gasto, motivoFinal);
+      
+      if (isDuplicate) {
+        toast.error("Gasto Duplicado", {
+            description: "Ya existe una solicitud registrada con este Picking, Tipo de Gasto y Motivo."
+        });
+        return; 
+      }
+
+      let volumen_minimo_m3 = null;
+      let tarifa_m3 = null;
+      let monto_liquidar_programador = null;
+
+      if (data.tipo_gasto === "Carga < al % mínimo") {
+        const vehiculoSeleccionado = vehicles.find((v) => v.id === data.vehiculo_id);
+        const capacidad = parseFloat(vehiculoSeleccionado?.capacidad_m3 || 0);
+        
+        // CÁLCULO DINÁMICO PARA LA BASE DE DATOS
+        const zonaObj = masters.zonas.find(z => z.nombre === data.zona);
+        const porcentaje = zonaObj && zonaObj.porcentaje_minimo ? parseFloat(zonaObj.porcentaje_minimo) : 80;
+        const factor = porcentaje / 100;
+        
+        volumen_minimo_m3 = parseFloat((capacidad * factor).toFixed(3));
+        tarifa_m3 = parseFloat(data.precio_unitario || 0);
+        monto_liquidar_programador = parseFloat(data.monto || 0); 
       }
 
       await createRequest({
         ...data,
         transportista_id: user.id,
         destinatario_id: destinatarioId,
-        motivo_gasto: data.motivo_texto || data.sustento || "", 
+        motivo_gasto: motivoFinal, 
         sustento_texto: data.sustento || "",
+        volumen_minimo_m3,
+        tarifa_m3,
+        monto_liquidar_programador
       });
 
       toast.success("¡Solicitud registrada correctamente!");
@@ -254,21 +297,12 @@ export default function NewRequest() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-20">
       <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={() => navigate("/mis-solicitudes")}
-          className="rounded-full"
-        >
+        <Button variant="secondary" size="icon" onClick={() => navigate("/mis-solicitudes")} className="rounded-full">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-sans">
-            Nueva Solicitud
-          </h1>
-          <p className="text-gray-500 text-sm">
-            Registro inteligente de gastos logísticos.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-sans">Nueva Solicitud</h1>
+          <p className="text-gray-500 text-sm">Registro inteligente de gastos logísticos.</p>
         </div>
       </div>
 
@@ -282,37 +316,37 @@ export default function NewRequest() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Placa del Vehículo</label>
-              <select
-                className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700"
-                {...register("vehiculo_id", { required: "Selecciona una placa" })}
-              >
+              <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700" {...register("vehiculo_id", { required: "Selecciona una placa" })}>
                 <option value="">Seleccionar Placa...</option>
-                {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.placa} (Cap: {v.capacidad_m3}m³)
-                  </option>
-                ))}
+                {vehicles.map((v) => <option key={v.id} value={v.id}>{v.placa} (Cap: {v.capacidad_m3}m³)</option>)}
               </select>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">N° Transporte (Picking)</label>
               <Input
-                type="number"
-                placeholder="Ej: 6050..."
-                {...register("nro_transporte", { required: true })}
+                type="text" inputMode="numeric" placeholder={`Ej: ${"6050432100".slice(0, pickingLength)}`} maxLength={pickingLength}
+                className={cn(pickingError && "border-red-500 focus:ring-red-500")}
+                {...register("nro_transporte", { 
+                  required: true,
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                    if (e.target.value.length === pickingLength) setPickingError(false);
+                  },
+                  onBlur: (e) => {
+                    if (e.target.value.length > 0 && e.target.value.length < pickingLength) setPickingError(true);
+                    else setPickingError(false);
+                  }
+                })}
               />
+              {pickingError && <p className="text-xs text-red-500 font-bold mt-1 animate-in fade-in">Picking incorrecto</p>}
             </div>
 
             <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium">Código Destinatario</label>
               <div className="relative">
                 <Search className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                <Input
-                  placeholder="Ej: 62390"
-                  className="pl-10"
-                  {...register("codigo_destinatario", { required: true })}
-                />
+                <Input placeholder="Ej: 62390" className="pl-10" {...register("codigo_destinatario", { required: true })} />
               </div>
               {destinatarioNombre && (
                 <div className="mt-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg flex items-center gap-2 animate-in fade-in">
@@ -323,33 +357,16 @@ export default function NewRequest() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Responsable Negociación</label>
-              <select
-                className="w-full h-12 rounded-xl border-gray-300"
-                {...register("usuario_id", { required: true })}
-              >
+              <select className="w-full h-12 rounded-xl border-gray-300" {...register("usuario_id", { required: true })}>
                 <option value="">Seleccionar Aprobador...</option>
-                {approvers.map((app) => (
-                  <option key={app.id} value={app.id}>
-                    {app.nombre_completo}
-                  </option>
-                ))}
+                {approvers.map((app) => <option key={app.id} value={app.id}>{app.nombre_completo}</option>)}
               </select>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Zona de Destino</label>
-              <select
-                className="w-full h-12 rounded-xl border-gray-300"
-                {...register("zona", { required: true })}
-              >
-                 {masters.zonas.length > 0 ? masters.zonas.map((z) => (
-                  <option key={z.id} value={z.nombre}>{z.nombre}</option>
-                 )) : (
-                   <>
-                     <option value="Lima">Lima</option>
-                     <option value="Provincia">Provincia</option>
-                   </>
-                 )}
+              <select className="w-full h-12 rounded-xl border-gray-300" {...register("zona", { required: true })}>
+                 {masters.zonas.length > 0 ? masters.zonas.map((z) => <option key={z.id} value={z.nombre}>{z.nombre}</option>) : (<><option value="Lima">Lima</option><option value="Provincia">Provincia</option></>)}
               </select>
             </div>
 
@@ -357,9 +374,7 @@ export default function NewRequest() {
                 <label className="text-sm font-medium">Canal</label>
                 <select className="w-full h-12 rounded-xl border-gray-300" {...register("canal", { required: true })}>
                     <option value="">Seleccionar...</option>
-                    {masters.canales.map((c) => (
-                        <option key={c.id} value={c.nombre}>{c.nombre}</option>
-                    ))}
+                    {masters.canales.map((c) => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
                 </select>
             </div>
 
@@ -384,14 +399,19 @@ export default function NewRequest() {
           </div>
 
           <div className="space-y-2">
+            <label className="text-sm font-medium">Motivo Generales</label>
+            <select className="w-full h-12 rounded-xl border-gray-300" {...register("motivo_gasto", { required: true })}>
+              <option value="">Seleccionar Motivo...</option>
+              {masters.motivosGenerales.map((m) => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
+            </select>
+          </div>
+
+          <div className="space-y-2">
             <label className="text-sm font-medium">Tipo de Gasto</label>
-            <select
-              className="w-full h-12 rounded-xl border-gray-300 bg-brand-50/50 border-brand-200 text-brand-900 font-bold"
-              {...register("tipo_gasto", { required: true })}
-            >
+            <select className="w-full h-12 rounded-xl border-gray-300 bg-brand-50/50 border-brand-200 text-brand-900 font-bold" {...register("tipo_gasto", { required: true })}>
               <option value="">Seleccionar Tipo...</option>
               <option value="Falso Flete">Falso Flete</option>
-              <option value="Carga < al % mínimo">Carga &lt; al Mínimo</option>
+              <option value="Carga < al % mínimo">Carga &lt; al % mínimo</option>
               <option value="Gasto Adicional">Gasto Adicional</option>
               <option value="Zona Rígida">Zona Rígida</option>
               <option value="Último Punto">Último Punto</option>
@@ -406,14 +426,9 @@ export default function NewRequest() {
                 <>
                     <div className="md:col-span-2 space-y-2">
                         <label className="text-sm font-medium">Ruta del Falso Flete</label>
-                        <select 
-                            className="w-full h-12 rounded-xl border-gray-300"
-                            {...register("ruta_falso_flete", { required: "Selecciona una ruta" })}
-                        >
+                        <select className="w-full h-12 rounded-xl border-gray-300" {...register("ruta_falso_flete", { required: "Selecciona una ruta" })}>
                             <option value="">Seleccionar Ruta...</option>
-                            {opciones.rutasFF.map((op) => (
-                                <option key={op.id} value={op.valor}>{op.etiqueta}</option>
-                            ))}
+                            {opciones.rutasFF.map((op) => <option key={op.id} value={op.valor}>{op.etiqueta}</option>)}
                         </select>
                     </div>
                     <div className="space-y-2">
@@ -430,15 +445,10 @@ export default function NewRequest() {
             {tipoGasto === "Carga < al % mínimo" && (
                 <>
                     <div className="md:col-span-2 space-y-2">
-                        <label className="text-sm font-medium">Motivo de Carga Baja</label>
-                        <select 
-                            className="w-full h-12 rounded-xl border-gray-300"
-                            {...register("motivo_texto", { required: "Selecciona un motivo" })}
-                        >
-                            <option value="">Seleccionar Motivo...</option>
-                            {opciones.motivosCM.map((op) => (
-                                <option key={op.id} value={op.valor}>{op.etiqueta}</option>
-                            ))}
+                        <label className="text-sm font-medium">Motivo Específico de Carga Baja</label>
+                        <select className="w-full h-12 rounded-xl border-gray-300" {...register("motivo_texto", { required: "Selecciona un motivo" })}>
+                            <option value="">Seleccionar Motivo Específico...</option>
+                            {opciones.motivosCM.map((op) => <option key={op.id} value={op.valor}>{op.etiqueta}</option>)}
                         </select>
                     </div>
                     <div className="space-y-2">
@@ -463,44 +473,27 @@ export default function NewRequest() {
 
           <div className="pt-6 border-t border-gray-100">
             <div className="flex items-center justify-between">
-              <label className="text-lg font-bold text-gray-900 dark:text-white">
-                Monto Total a Pagar
-              </label>
+              <label className="text-lg font-bold text-gray-900 dark:text-white">Monto Total a Pagar</label>
               <div className="w-1/2 relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">S/</span>
                 <Input
-                  type="number"
-                  step="0.01"
-                  className={cn(
-                    "pl-10 text-right text-xl font-bold h-14",
-                    (tipoGasto === "Falso Flete" || tipoGasto === "Carga < al % mínimo")
-                      ? "bg-gray-100 text-brand-700 cursor-not-allowed"
-                      : "bg-white border-brand-200 text-gray-900 focus:ring-brand-500"
-                  )}
+                  type="number" step="0.01"
+                  className={cn("pl-10 text-right text-xl font-bold h-14", (tipoGasto === "Falso Flete" || tipoGasto === "Carga < al % mínimo") ? "bg-gray-100 text-brand-700 cursor-not-allowed" : "bg-white border-brand-200 text-gray-900 focus:ring-brand-500")}
                   readOnly={tipoGasto === "Falso Flete" || tipoGasto === "Carga < al % mínimo"}
                   placeholder="0.00"
                   {...register("monto", { required: true, min: 0.1 })}
                 />
               </div>
             </div>
-            
             {tipoGasto === "Carga < al % mínimo" && volumen && tarifa && !watch("monto") && (
-                 <p className="text-xs text-right text-red-500 mt-2 font-medium">
-                    * El volumen cargado supera el mínimo. No corresponde pago adicional.
-                 </p>
+                 <p className="text-xs text-right text-red-500 mt-2 font-medium">* El volumen cargado supera el mínimo. No corresponde pago adicional.</p>
             )}
           </div>
         </section>
 
-        <Button
-            type="submit"
-            className="w-full h-14 text-lg font-bold shadow-xl shadow-brand-700/20"
-            isLoading={isSubmitting}
-        >
-            <Save className="mr-2 h-5 w-5" />
-            Registrar Solicitud
+        <Button type="submit" className="w-full h-14 text-lg font-bold shadow-xl shadow-brand-700/20" isLoading={isSubmitting}>
+            <Save className="mr-2 h-5 w-5" /> Registrar Solicitud
         </Button>
-
       </form>
     </div>
   );
