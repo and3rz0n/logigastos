@@ -130,7 +130,7 @@ export default function NewRequest() {
     setValue("motivo_texto", ""); 
   }, [tipoGasto, setValue]);
 
-  // --- NUEVA LÓGICA DE CÁLCULO DINÁMICO ---
+  // --- LÓGICA DE CÁLCULO DINÁMICO ---
   useEffect(() => {
     if (!vehiculoId || !tipoGasto) return;
     if (["Gasto Adicional", "Zona Rígida", "Último Punto"].includes(tipoGasto)) return;
@@ -151,10 +151,9 @@ export default function NewRequest() {
     }
     else if (tipoGasto === "Carga < al % mínimo") {
       if (capacidad > 0 && tar > 0) {
-        // BUSCAMOS EL FACTOR DINÁMICO DESDE LA BASE DE DATOS
         const zonaObj = masters.zonas.find(z => z.nombre === zona);
         const porcentaje = zonaObj && zonaObj.porcentaje_minimo ? parseFloat(zonaObj.porcentaje_minimo) : 80;
-        const factor = porcentaje / 100; // Ej: 85 -> 0.85
+        const factor = porcentaje / 100; 
         
         const volumenMinimoRequerido = capacidad * factor;
         const volumenPagable = volumenMinimoRequerido - vol;
@@ -179,11 +178,11 @@ export default function NewRequest() {
 
     if (tipoGasto === "Falso Flete") {
       return (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 animate-in fade-in slide-in-from-top-2">
-          <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex gap-3 animate-in fade-in slide-in-from-top-2">
+          <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="text-sm font-bold text-blue-800">Sobre Falso Flete</p>
-            <p className="text-sm text-blue-700">
+            <p className="text-sm font-bold text-blue-800 dark:text-blue-200">Sobre Falso Flete</p>
+            <p className="text-sm text-blue-700 dark:text-blue-300">
               Indique el volumen pactado y el precio por <strong>m³</strong> según contrato para <strong>falsos fletes</strong>.
             </p>
           </div>
@@ -193,11 +192,11 @@ export default function NewRequest() {
 
     if (["Gasto Adicional", "Zona Rígida", "Último Punto"].includes(tipoGasto)) {
       return (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex gap-3 animate-in fade-in">
-          <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 flex gap-3 animate-in fade-in">
+          <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="text-sm font-bold text-orange-800">Requisito de Sustento</p>
-            <p className="text-sm text-orange-700">
+            <p className="text-sm font-bold text-orange-800 dark:text-orange-200">Requisito de Sustento</p>
+            <p className="text-sm text-orange-700 dark:text-orange-300">
               El monto debe ser <strong>SIN IGV</strong>. En el sustento detalla: Concepto, Cantidad y Precio Unitario.
             </p>
           </div>
@@ -206,19 +205,18 @@ export default function NewRequest() {
     }
 
     if (tipoGasto === "Carga < al % mínimo") {
-        // MOSTRAMOS EL TEXTO DINÁMICO AL USUARIO
         const zonaObj = masters.zonas.find(z => z.nombre === zona);
         const porcentaje = zonaObj && zonaObj.porcentaje_minimo ? zonaObj.porcentaje_minimo : 80;
         
         return (
-          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex gap-3 animate-in fade-in">
-            <Calculator className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 flex gap-3 animate-in fade-in">
+            <Calculator className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="text-sm font-bold text-purple-800">Cálculo Automático ({zona})</p>
-              <p className="text-sm text-purple-700">
+              <p className="text-sm font-bold text-purple-800 dark:text-purple-200">Cálculo Automático ({zona})</p>
+              <p className="text-sm text-purple-700 dark:text-purple-300">
                 Se aplicará la fórmula según contrato ({porcentaje}%):
                 <br/>
-                <code className="bg-purple-100 px-1 py-0.5 rounded text-xs font-mono font-bold">
+                <code className="bg-purple-100 dark:bg-purple-900/50 px-1 py-0.5 rounded text-xs font-mono font-bold">
                   (Vol. Mínimo - Vol. Cargado) x Tarifa
                 </code>
               </p>
@@ -266,7 +264,6 @@ export default function NewRequest() {
         const vehiculoSeleccionado = vehicles.find((v) => v.id === data.vehiculo_id);
         const capacidad = parseFloat(vehiculoSeleccionado?.capacidad_m3 || 0);
         
-        // CÁLCULO DINÁMICO PARA LA BASE DE DATOS
         const zonaObj = masters.zonas.find(z => z.nombre === data.zona);
         const porcentaje = zonaObj && zonaObj.porcentaje_minimo ? parseFloat(zonaObj.porcentaje_minimo) : 80;
         const factor = porcentaje / 100;
@@ -302,28 +299,28 @@ export default function NewRequest() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-sans">Nueva Solicitud</h1>
-          <p className="text-gray-500 text-sm">Registro inteligente de gastos logísticos.</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Registro inteligente de gastos logísticos.</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         
         <section className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-6">
-          <h3 className="text-sm font-bold text-brand-700 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-bold text-brand-700 dark:text-brand-400 uppercase tracking-wider flex items-center gap-2">
             <Truck className="w-4 h-4" /> Datos del Transporte
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Placa del Vehículo</label>
-              <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700" {...register("vehiculo_id", { required: "Selecciona una placa" })}>
+              <label className="text-sm font-medium dark:text-gray-300">Placa del Vehículo</label>
+              <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand-500" {...register("vehiculo_id", { required: "Selecciona una placa" })}>
                 <option value="">Seleccionar Placa...</option>
                 {vehicles.map((v) => <option key={v.id} value={v.id}>{v.placa} (Cap: {v.capacidad_m3}m³)</option>)}
               </select>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">N° Transporte (Picking)</label>
+              <label className="text-sm font-medium dark:text-gray-300">N° Transporte (Picking)</label>
               <Input
                 type="text" inputMode="numeric" placeholder={`Ej: ${"6050432100".slice(0, pickingLength)}`} maxLength={pickingLength}
                 className={cn(pickingError && "border-red-500 focus:ring-red-500")}
@@ -343,43 +340,43 @@ export default function NewRequest() {
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">Código Destinatario</label>
+              <label className="text-sm font-medium dark:text-gray-300">Código Destinatario</label>
               <div className="relative">
                 <Search className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                 <Input placeholder="Ej: 62390" className="pl-10" {...register("codigo_destinatario", { required: true })} />
               </div>
               {destinatarioNombre && (
-                <div className="mt-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg flex items-center gap-2 animate-in fade-in">
+                <div className="mt-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg flex items-center gap-2 animate-in fade-in border border-green-100 dark:border-green-800">
                   <Building2 className="w-4 h-4" /> {destinatarioNombre}
                 </div>
               )}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Responsable Negociación</label>
-              <select className="w-full h-12 rounded-xl border-gray-300" {...register("usuario_id", { required: true })}>
+              <label className="text-sm font-medium dark:text-gray-300">Responsable Negociación</label>
+              <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand-500" {...register("usuario_id", { required: true })}>
                 <option value="">Seleccionar Aprobador...</option>
                 {approvers.map((app) => <option key={app.id} value={app.id}>{app.nombre_completo}</option>)}
               </select>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Zona de Destino</label>
-              <select className="w-full h-12 rounded-xl border-gray-300" {...register("zona", { required: true })}>
+              <label className="text-sm font-medium dark:text-gray-300">Zona de Destino</label>
+              <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand-500" {...register("zona", { required: true })}>
                  {masters.zonas.length > 0 ? masters.zonas.map((z) => <option key={z.id} value={z.nombre}>{z.nombre}</option>) : (<><option value="Lima">Lima</option><option value="Provincia">Provincia</option></>)}
               </select>
             </div>
 
             <div className="space-y-2">
-                <label className="text-sm font-medium">Canal</label>
-                <select className="w-full h-12 rounded-xl border-gray-300" {...register("canal", { required: true })}>
+                <label className="text-sm font-medium dark:text-gray-300">Canal</label>
+                <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand-500" {...register("canal", { required: true })}>
                     <option value="">Seleccionar...</option>
                     {masters.canales.map((c) => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
                 </select>
             </div>
 
              <div className="space-y-2">
-                <label className="text-sm font-medium">Fecha Factura</label>
+                <label className="text-sm font-medium dark:text-gray-300">Fecha Factura</label>
                 <Input type="date" {...register("fecha", { required: true })} />
             </div>
           </div>
@@ -387,11 +384,11 @@ export default function NewRequest() {
 
         <section className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-brand-700 uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-sm font-bold text-brand-700 dark:text-brand-400 uppercase tracking-wider flex items-center gap-2">
                 <DollarSign className="w-4 h-4" /> Detalle Económico
             </h3>
             <div className="w-1/3">
-                 <select className="w-full text-xs h-8 rounded-lg border-gray-200 bg-gray-50" {...register("area_id", { required: true })}>
+                 <select className="w-full text-xs h-8 rounded-lg border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-gray-300" {...register("area_id", { required: true })}>
                     <option value="">Área Atribuible...</option>
                     {masters.areas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                 </select>
@@ -399,16 +396,16 @@ export default function NewRequest() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Motivo Generales</label>
-            <select className="w-full h-12 rounded-xl border-gray-300" {...register("motivo_gasto", { required: true })}>
+            <label className="text-sm font-medium dark:text-gray-300">Motivo Generales</label>
+            <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand-500" {...register("motivo_gasto", { required: true })}>
               <option value="">Seleccionar Motivo...</option>
               {masters.motivosGenerales.map((m) => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
             </select>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Tipo de Gasto</label>
-            <select className="w-full h-12 rounded-xl border-gray-300 bg-brand-50/50 border-brand-200 text-brand-900 font-bold" {...register("tipo_gasto", { required: true })}>
+            <label className="text-sm font-medium dark:text-gray-300">Tipo de Gasto</label>
+            <select className="w-full h-12 rounded-xl border-gray-300 bg-brand-50/50 dark:bg-brand-900/20 border-brand-200 dark:border-brand-800 text-brand-900 dark:text-brand-300 font-bold outline-none focus:ring-2 focus:ring-brand-500" {...register("tipo_gasto", { required: true })}>
               <option value="">Seleccionar Tipo...</option>
               <option value="Falso Flete">Falso Flete</option>
               <option value="Carga < al % mínimo">Carga &lt; al % mínimo</option>
@@ -425,18 +422,18 @@ export default function NewRequest() {
             {tipoGasto === "Falso Flete" && (
                 <>
                     <div className="md:col-span-2 space-y-2">
-                        <label className="text-sm font-medium">Ruta del Falso Flete</label>
-                        <select className="w-full h-12 rounded-xl border-gray-300" {...register("ruta_falso_flete", { required: "Selecciona una ruta" })}>
+                        <label className="text-sm font-medium dark:text-gray-300">Ruta del Falso Flete</label>
+                        <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand-500" {...register("ruta_falso_flete", { required: "Selecciona una ruta" })}>
                             <option value="">Seleccionar Ruta...</option>
                             {opciones.rutasFF.map((op) => <option key={op.id} value={op.valor}>{op.etiqueta}</option>)}
                         </select>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Volumen (m³)</label>
+                        <label className="text-sm font-medium dark:text-gray-300">Volumen (m³)</label>
                         <Input type="number" step="0.01" placeholder="0.00" {...register("volumen")} />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Tarifa Pactada (S/)</label>
+                        <label className="text-sm font-medium dark:text-gray-300">Tarifa Pactada (S/)</label>
                         <Input type="number" step="0.01" placeholder="0.00" {...register("precio_unitario")} />
                     </div>
                 </>
@@ -445,18 +442,18 @@ export default function NewRequest() {
             {tipoGasto === "Carga < al % mínimo" && (
                 <>
                     <div className="md:col-span-2 space-y-2">
-                        <label className="text-sm font-medium">Motivo Específico de Carga Baja</label>
-                        <select className="w-full h-12 rounded-xl border-gray-300" {...register("motivo_texto", { required: "Selecciona un motivo" })}>
+                        <label className="text-sm font-medium dark:text-gray-300">Motivo Específico de Carga Baja</label>
+                        <select className="w-full h-12 rounded-xl border-gray-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand-500" {...register("motivo_texto", { required: "Selecciona un motivo" })}>
                             <option value="">Seleccionar Motivo Específico...</option>
                             {opciones.motivosCM.map((op) => <option key={op.id} value={op.valor}>{op.etiqueta}</option>)}
                         </select>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Volumen Cargado Real (m³)</label>
+                        <label className="text-sm font-medium dark:text-gray-300">Volumen Cargado Real (m³)</label>
                         <Input type="number" step="0.01" placeholder="0.00" {...register("volumen")} />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Tarifa (S/)</label>
+                        <label className="text-sm font-medium dark:text-gray-300">Tarifa (S/)</label>
                         <Input type="number" step="0.01" placeholder="0.00" {...register("precio_unitario")} />
                     </div>
                 </>
@@ -464,21 +461,21 @@ export default function NewRequest() {
 
             {["Gasto Adicional", "Zona Rígida", "Último Punto"].includes(tipoGasto) && (
                  <div className="md:col-span-2 space-y-2">
-                    <label className="text-sm font-medium">Sustento Detallado</label>
+                    <label className="text-sm font-medium dark:text-gray-300">Sustento Detallado</label>
                     <Input placeholder="Ej: 2 estibas, S/40 c/u" {...register("sustento", { required: true })} />
                  </div>
             )}
 
           </div>
 
-          <div className="pt-6 border-t border-gray-100">
+          <div className="pt-6 border-t border-gray-100 dark:border-slate-700">
             <div className="flex items-center justify-between">
               <label className="text-lg font-bold text-gray-900 dark:text-white">Monto Total a Pagar</label>
               <div className="w-1/2 relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">S/</span>
                 <Input
                   type="number" step="0.01"
-                  className={cn("pl-10 text-right text-xl font-bold h-14", (tipoGasto === "Falso Flete" || tipoGasto === "Carga < al % mínimo") ? "bg-gray-100 text-brand-700 cursor-not-allowed" : "bg-white border-brand-200 text-gray-900 focus:ring-brand-500")}
+                  className={cn("pl-10 text-right text-xl font-bold h-14", (tipoGasto === "Falso Flete" || tipoGasto === "Carga < al % mínimo") ? "bg-gray-100 dark:bg-slate-900 text-brand-700 dark:text-brand-400 cursor-not-allowed" : "bg-white dark:bg-slate-800 border-brand-200 dark:border-slate-700 text-gray-900 dark:text-white focus:ring-brand-500")}
                   readOnly={tipoGasto === "Falso Flete" || tipoGasto === "Carga < al % mínimo"}
                   placeholder="0.00"
                   {...register("monto", { required: true, min: 0.1 })}
@@ -486,12 +483,12 @@ export default function NewRequest() {
               </div>
             </div>
             {tipoGasto === "Carga < al % mínimo" && volumen && tarifa && !watch("monto") && (
-                 <p className="text-xs text-right text-red-500 mt-2 font-medium">* El volumen cargado supera el mínimo. No corresponde pago adicional.</p>
+                 <p className="text-xs text-right text-red-500 dark:text-red-400 mt-2 font-medium">* El volumen cargado supera el mínimo. No corresponde pago adicional.</p>
             )}
           </div>
         </section>
 
-        <Button type="submit" className="w-full h-14 text-lg font-bold shadow-xl shadow-brand-700/20" isLoading={isSubmitting}>
+        <Button type="submit" className="w-full h-14 text-lg font-bold shadow-xl shadow-brand-700/20 dark:shadow-none" isLoading={isSubmitting}>
             <Save className="mr-2 h-5 w-5" /> Registrar Solicitud
         </Button>
       </form>

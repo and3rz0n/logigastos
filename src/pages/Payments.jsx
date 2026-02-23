@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Receipt,
   ShieldCheck,
+  ChevronLeft
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -35,8 +36,15 @@ export default function Payments() {
   const [activeTab, setActiveTab] = useState("pending");
   const [loading, setLoading] = useState(true);
 
+  // Estados de Datos
   const [pending, setPending] = useState([]);
   const [history, setHistory] = useState([]);
+
+  // Estados de Paginación y Filtros (10 registros por página)
+  const [currentPagePending, setCurrentPagePending] = useState(1);
+  const [currentPageHistory, setCurrentPageHistory] = useState(1);
+  const [totalCountPending, setTotalCountPending] = useState(0);
+  const [totalCountHistory, setTotalCountHistory] = useState(0);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -45,22 +53,28 @@ export default function Payments() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
+  // Carga de datos reactiva a cambios de pestaña, página o filtros globales
   useEffect(() => {
     loadData();
-  }, [activeTab]);
+  }, [activeTab, currentPagePending, currentPageHistory, searchTerm, dateFrom, dateTo]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       if (activeTab === "pending") {
-        const data = await getApprovedForPayment();
+        // Búsqueda global y paginación en el servidor para Pendientes
+        const { data, totalCount } = await getApprovedForPayment(currentPagePending, searchTerm);
         setPending(data || []);
+        setTotalCountPending(totalCount || 0);
       } else {
-        const data = await getPaidHistory();
+        // Búsqueda global y paginación en el servidor para Historial (Incluye filtros de fecha)
+        const { data, totalCount } = await getPaidHistory(currentPageHistory, searchTerm, dateFrom, dateTo);
         setHistory(data || []);
+        setTotalCountHistory(totalCount || 0);
       }
     } catch (error) {
-      toast.error("Error al cargar datos");
+      console.error(error);
+      toast.error("Error al sincronizar con el servidor");
     } finally {
       setLoading(false);
     }
@@ -69,9 +83,7 @@ export default function Payments() {
   const handleProcessPayments = async () => {
     try {
       await processBatchPayments(selectedIds, user.id);
-      toast.success(
-        `¡Pago procesado correctamente! (${selectedIds.length} solicitudes)`,
-      );
+      toast.success(`¡Pago procesado correctamente! (${selectedIds.length} solicitudes)`);
       setIsConfirmModalOpen(false);
       setSelectedIds([]);
       loadData();
@@ -87,28 +99,18 @@ export default function Payments() {
   };
 
   const selectAll = () => {
-    if (selectedIds.length === filteredData.length) {
+    if (selectedIds.length === pending.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredData.map((item) => item.id));
+      setSelectedIds(pending.map((item) => item.id));
     }
   };
 
   const currentList = activeTab === "pending" ? pending : history;
-
-  const filteredData = currentList.filter((item) => {
-    const term = searchTerm.toLowerCase();
-    const matchesSearch =
-      (item.nro_transporte_sap && item.nro_transporte_sap.toLowerCase().includes(term)) ||
-      (item.nombre_transportista && item.nombre_transportista.toLowerCase().includes(term)) ||
-      (item.placa_vehiculo && item.placa_vehiculo.toLowerCase().includes(term));
-
-    const itemDate = new Date(item.created_at).toISOString().split("T")[0];
-    const matchesFrom = !dateFrom || itemDate >= dateFrom;
-    const matchesTo = !dateTo || itemDate <= dateTo;
-
-    return matchesSearch && matchesFrom && matchesTo;
-  });
+  const currentTotal = activeTab === "pending" ? totalCountPending : totalCountHistory;
+  const currentPage = activeTab === "pending" ? currentPagePending : currentPageHistory;
+  const setCurrentPage = activeTab === "pending" ? setCurrentPagePending : setCurrentPageHistory;
+  const totalPages = Math.ceil(currentTotal / 10);
 
   const totalSelectedMoney = pending
     .filter((p) => selectedIds.includes(p.id))
@@ -119,9 +121,9 @@ export default function Payments() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-sans flex items-center gap-2">
-            <DollarSign className="text-amber-600 w-7 h-7" /> Bandeja de Pagos
+            <DollarSign className="text-amber-600 dark:text-amber-500 w-7 h-7" /> Bandeja de Pagos
           </h1>
-          <p className="text-gray-500 text-sm">
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
             Gestiona y liquida las solicitudes aprobadas.
           </p>
         </div>
@@ -136,8 +138,8 @@ export default function Payments() {
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all",
             activeTab === "pending"
-              ? "bg-white dark:bg-slate-700 text-brand-700 shadow-sm"
-              : "text-gray-500 hover:text-gray-700",
+              ? "bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-400 shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200",
           )}
         >
           <Clock className="w-4 h-4" /> Pendientes de Pago
@@ -150,58 +152,78 @@ export default function Payments() {
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all",
             activeTab === "history"
-              ? "bg-white dark:bg-slate-700 text-brand-700 shadow-sm"
-              : "text-gray-500 hover:text-gray-700",
+              ? "bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-400 shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200",
           )}
         >
           <History className="w-4 h-4" /> Historial de Pagos
         </button>
       </div>
 
+      {/* Buscador Global y Filtros de Fecha */}
       <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-wrap gap-4 items-end">
-        <div className="flex-1 min-w-[240px]">
-          <label className="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">
-            Buscador
+        <div className="flex-1 min-w-[320px]">
+          <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1">
+            Buscador Global
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
             <Input
-              placeholder="Picking, Placa o Transportista..."
-              className="pl-9"
+              placeholder="Picking, Placa, Transportista o Aprobador..."
+              className="pl-10 dark:text-white h-12 text-base"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPagePending(1);
+                setCurrentPageHistory(1);
+              }}
             />
           </div>
         </div>
-        <div className="w-full sm:w-auto flex gap-2">
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">
-              Desde
-            </label>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
+        
+        {activeTab === "history" && (
+          <div className="w-full lg:w-auto flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1">
+                Desde
+              </label>
+              <Input
+                type="date"
+                className="dark:text-white h-12"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setCurrentPageHistory(1);
+                }}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1">
+                Hasta
+              </label>
+              <Input
+                type="date"
+                className="dark:text-white h-12"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setCurrentPageHistory(1);
+                }}
+              />
+            </div>
           </div>
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">
-              Hasta
-            </label>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </div>
-        </div>
+        )}
+        
         {(searchTerm || dateFrom || dateTo) && (
           <Button
             variant="secondary"
+            className="h-12"
             onClick={() => {
               setSearchTerm("");
               setDateFrom("");
               setDateTo("");
+              setCurrentPagePending(1);
+              setCurrentPageHistory(1);
             }}
           >
             Limpiar
@@ -209,35 +231,35 @@ export default function Payments() {
         )}
       </div>
 
-      {loading ? (
-        <div className="text-center py-20 text-gray-500">
-          Cargando información...
+      {loading && currentList.length === 0 ? (
+        <div className="text-center py-20 text-gray-500 dark:text-gray-400 animate-pulse font-medium">
+          Consultando registros en tiempo real...
         </div>
-      ) : filteredData.length === 0 ? (
-        <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border-2 border-dashed border-gray-100 dark:border-slate-700">
-          <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-900">No hay registros</h3>
-          <p className="text-gray-500">
-            No se encontraron solicitudes en esta sección.
+      ) : currentList.length === 0 ? (
+        <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border-2 border-dashed border-gray-200 dark:border-slate-700">
+          <AlertCircle className="w-12 h-12 text-gray-300 dark:text-slate-700 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Sin resultados</h3>
+          <p className="text-gray-500 dark:text-gray-400">
+            No se encontraron registros con los criterios actuales.
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {activeTab === "pending" && (
             <div className="flex items-center gap-2 mb-2 ml-1">
               <button
                 onClick={selectAll}
-                className="text-xs font-bold text-brand-600 hover:underline"
+                className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline"
               >
-                {selectedIds.length === filteredData.length
+                {selectedIds.length === pending.length
                   ? "Desmarcar todos"
-                  : "Seleccionar todos"}
+                  : "Seleccionar todos en esta página"}
               </button>
             </div>
           )}
 
           <div className="grid grid-cols-1 gap-4">
-            {filteredData.map((item) => (
+            {currentList.map((item) => (
               <PaymentCard
                 key={item.id}
                 item={item}
@@ -247,24 +269,50 @@ export default function Payments() {
               />
             ))}
           </div>
+
+          {/* Controles de Paginación Global */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 bg-gray-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-800">
+            <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+              Página <span className="text-brand-700 dark:text-brand-400 font-bold">{currentPage}</span> de {totalPages || 1} 
+              <span className="mx-2">•</span> 
+              Total: <span className="font-bold">{currentTotal}</span> registros
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 bg-white dark:bg-slate-800"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || loading}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 bg-white dark:bg-slate-800"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || loading}
+              >
+                Siguiente <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
       {activeTab === "pending" && selectedIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl bg-slate-900 dark:bg-slate-800 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4 border dark:border-slate-700 z-50">
           <div className="flex items-center gap-4">
             <div className="bg-brand-500 p-2 rounded-lg">
               <CreditCard className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-xs text-slate-400 font-bold uppercase">
+              <p className="text-xs text-slate-400 dark:text-slate-400 font-bold uppercase">
                 {selectedIds.length} Seleccionados
               </p>
               <p className="text-xl font-bold">
-                Total: S/{" "}
-                {totalSelectedMoney.toLocaleString("es-PE", {
-                  minimumFractionDigits: 2,
-                })}
+                Total: S/ {totalSelectedMoney.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -283,33 +331,20 @@ export default function Payments() {
         title="Confirmar Pago Masivo"
       >
         <div className="space-y-4 pt-2">
-          <p className="text-gray-600 text-sm">
-            Estás por marcar como{" "}
-            <span className="font-bold text-green-600 text-base">PAGADO</span>{" "}
-            un total de <strong>{selectedIds.length} solicitudes</strong>.
+          <p className="text-gray-600 dark:text-gray-300 text-sm">
+            Estás por marcar como <span className="font-bold text-green-600 dark:text-green-400 text-base">PAGADO</span> un total de <strong>{selectedIds.length} solicitudes</strong>.
           </p>
-          <div className="bg-gray-50 p-4 rounded-xl border">
-            <div className="flex justify-between text-sm mb-1">
+          <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border dark:border-slate-700">
+            <div className="flex justify-between text-sm mb-1 dark:text-gray-400">
               <span>Monto Total a Liquidar:</span>
-              <span className="font-bold text-lg">
-                S/{" "}
-                {totalSelectedMoney.toLocaleString("es-PE", {
-                  minimumFractionDigits: 2,
-                })}
+              <span className="font-bold text-lg text-gray-900 dark:text-white">
+                S/ {totalSelectedMoney.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
               </span>
             </div>
           </div>
           <div className="flex gap-3 pt-4">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setIsConfirmModalOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button className="flex-1" onClick={handleProcessPayments}>
-              Confirmar Pago
-            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => setIsConfirmModalOpen(false)}>Cancelar</Button>
+            <Button className="flex-1" onClick={handleProcessPayments}>Confirmar Pago</Button>
           </div>
         </div>
       </Modal>
@@ -318,36 +353,18 @@ export default function Payments() {
 }
 
 function PaymentCard({ item, isPending, isSelected, onToggle }) {
-  // Función para procesar fechas de forma segura y evitar el "Invalid Date"
   const safeFormatDate = (dateStr, includeTime = false) => {
     if (!dateStr) return null;
     try {
-      const cleanStr = dateStr.includes(" ")
-        ? dateStr.replace(" ", "T")
-        : dateStr;
+      const cleanStr = dateStr.includes(" ") ? dateStr.replace(" ", "T") : dateStr;
       const d = new Date(cleanStr);
       if (isNaN(d.getTime())) return null;
-
-      return d.toLocaleDateString(
-        "es-PE",
-        includeTime
-          ? {
-              day: "2-digit",
-              month: "short",
-              hour: "2-digit",
-              minute: "2-digit",
-            }
-          : { day: "2-digit", month: "short" },
-      );
-    } catch (e) {
-      return null;
-    }
+      return d.toLocaleDateString("es-PE", includeTime ? { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "short" });
+    } catch (e) { return null; }
   };
 
   const fSolicitud = safeFormatDate(item.created_at) || "---";
-  const fFactura = item.fecha_factura
-    ? safeFormatDate(item.fecha_factura + "T00:00:00")
-    : "---";
+  const fFactura = item.fecha_factura ? safeFormatDate(item.fecha_factura + "T00:00:00") : "---";
   const fResolucion = safeFormatDate(item.updated_at, true) || "---";
 
   return (
@@ -357,16 +374,14 @@ function PaymentCard({ item, isPending, isSelected, onToggle }) {
         "bg-white dark:bg-slate-800 p-5 rounded-2xl border transition-all cursor-pointer flex gap-4 items-center",
         isSelected
           ? "border-brand-500 ring-2 ring-brand-500/20"
-          : "border-gray-100 dark:border-slate-700 shadow-sm hover:border-gray-300",
+          : "border-gray-100 dark:border-slate-700 shadow-sm hover:border-gray-300 dark:hover:border-slate-600",
       )}
     >
       {isPending && (
         <div
           className={cn(
             "w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors",
-            isSelected
-              ? "bg-brand-500 border-brand-500"
-              : "bg-white border-gray-300",
+            isSelected ? "bg-brand-500 border-brand-500" : "bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600",
           )}
         >
           {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
@@ -377,77 +392,54 @@ function PaymentCard({ item, isPending, isSelected, onToggle }) {
         <div className="flex justify-between items-start mb-2">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-slate-50 dark:bg-slate-700 rounded-lg">
-              <Store className="w-5 h-5 text-slate-400" />
+              <Store className="w-5 h-5 text-slate-400 dark:text-slate-500" />
             </div>
             <div>
               <h4 className="font-bold text-gray-900 dark:text-white truncate max-w-[200px] sm:max-w-xs uppercase">
                 {item.nombre_transportista}
               </h4>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 mt-0.5">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3" /> Sol: {fSolicitud}
-                </span>
-                <span className="flex items-center gap-1 font-semibold text-gray-600 dark:text-gray-400">
-                  <Receipt className="w-3 h-3" /> Fac: {fFactura}
-                </span>
-                <span
-                  className={cn(
-                    "flex items-center gap-1 font-bold",
-                    isPending ? "text-green-600" : "text-blue-600",
-                  )}
-                >
-                  <Clock className="w-3 h-3" />{" "}
-                  {isPending ? "Aprobado el: " : "Pagado el: "} {fResolucion}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Sol: {fSolicitud}</span>
+                <span className="flex items-center gap-1 font-semibold text-gray-600 dark:text-gray-300"><Receipt className="w-3 h-3" /> Fac: {fFactura}</span>
+                <span className={cn("flex items-center gap-1 font-bold", isPending ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400")}>
+                  <Clock className="w-3 h-3" /> {isPending ? "Aprobado el: " : "Pagado el: "} {fResolucion}
                 </span>
               </div>
             </div>
           </div>
           <div className="text-right">
-            <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-              Monto
-            </span>
-            <span className="text-lg font-black text-gray-900 dark:text-white">
-              S/{" "}
-              {item.total_gasto?.toLocaleString("es-PE", {
-                minimumFractionDigits: 2,
-              })}
-            </span>
+            <span className="block text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">Monto</span>
+            <span className="text-lg font-black text-gray-900 dark:text-white">S/ {item.total_gasto?.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
 
-        {/* FILA 2: DETALLES TÉCNICOS Y RESPONSABLES */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-50 dark:border-slate-700">
+        {/* Sección de Datos Técnicos: Visible y aplanada gracias a la Vista Operativa */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-50 dark:border-slate-700/50">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-400 font-bold uppercase">
-              Vehículo:
-            </span>
-            <span className="font-mono font-bold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-100 text-xs">
-              {item.placa_vehiculo}
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Vehículo:</span>
+            <span className="font-mono font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/20 px-1.5 py-0.5 rounded border border-brand-100 dark:border-brand-800 text-xs">
+                {item.placa_vehiculo}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-400 font-bold uppercase">
-              Área:
-            </span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Área:</span>
             <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <MapPin className="w-3 h-3 text-gray-400" /> {item.nombre_area}
+              <MapPin className="w-3 h-3 text-gray-400 dark:text-gray-500" /> {item.nombre_area}
             </span>
           </div>
 
           <div className="sm:col-span-2 flex justify-end items-center gap-2">
             {isPending ? (
               <div className="flex flex-col items-end">
-                <span className="text-[10px] text-gray-400 font-bold uppercase mb-1">
-                  Aprobador Asignado: {item.nombre_aprobador_asignado}
-                </span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Aprobador Asignado: {item.nombre_aprobador_asignado}</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-full border border-green-100 dark:border-green-800">
                   <ShieldCheck className="w-3.5 h-3.5" />
                   Aprobado por {item.nombre_aprobador_real && item.nombre_aprobador_real !== 'N/A' ? item.nombre_aprobador_real : item.nombre_aprobador_asignado}
                 </span>
               </div>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-full border border-blue-100 dark:border-blue-800">
                 <CheckCircle className="w-3.5 h-3.5" />
                 Pagado por {item.nombre_pagador}
               </span>

@@ -155,7 +155,7 @@ export default function GeneralHistory() {
         <Button 
           onClick={handleExport} 
           disabled={isExporting || loading}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-lg shadow-emerald-500/20 px-6 h-11"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-lg shadow-emerald-500/20 disabled:bg-gray-400 disabled:shadow-none px-6 h-11"
         >
           <Download className="w-4 h-4" />
           {isExporting ? "Procesando..." : `Exportar ( ${isFiltered ? totalCount : data.length} )`}
@@ -169,7 +169,7 @@ export default function GeneralHistory() {
           <Search className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
           <Input
             placeholder="Buscar por N° Transporte, Proveedor o Placa asociada..."
-            className="pl-10 h-12 text-base shadow-sm border-gray-200"
+            className="pl-10 h-12 text-base shadow-sm border-gray-200 dark:border-slate-700"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -185,7 +185,7 @@ export default function GeneralHistory() {
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Motivo</label>
             <select 
-              className="w-full h-11 px-3 rounded-xl border border-gray-200 bg-white dark:bg-slate-800 text-xs font-medium outline-none shadow-sm cursor-pointer"
+              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white outline-none shadow-sm cursor-pointer"
               value={filters.motivo}
               onChange={(e) => {setFilters({...filters, motivo: e.target.value}); setCurrentPage(1);}}
             >
@@ -198,7 +198,7 @@ export default function GeneralHistory() {
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Fe. Registro</label>
             <input 
               type="date" 
-              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium outline-none shadow-sm"
+              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white outline-none shadow-sm"
               value={filters.fe_registro}
               onChange={(e) => {setFilters({...filters, fe_registro: e.target.value}); setCurrentPage(1);}}
             />
@@ -208,7 +208,7 @@ export default function GeneralHistory() {
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Fe. Factura</label>
             <input 
               type="date" 
-              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium outline-none shadow-sm"
+              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white outline-none shadow-sm"
               value={filters.fe_factura}
               onChange={(e) => {setFilters({...filters, fe_factura: e.target.value}); setCurrentPage(1);}}
             />
@@ -226,7 +226,7 @@ export default function GeneralHistory() {
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left border-collapse table-auto">
-            <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700 border-b border-gray-200">
+            <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
               <tr>
                 <Th className="min-w-[120px]">Fe. Registro</Th>
                 <Th className="min-w-[200px]">Nombre del proveedor</Th>
@@ -265,7 +265,7 @@ export default function GeneralHistory() {
                 <Th>Tipo Cuenta</Th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
               {loading ? (
                 <tr><td colSpan="35" className="px-6 py-20 text-center animate-pulse text-gray-400 font-bold text-sm">Sincronizando con el servidor...</td></tr>
               ) : data.length === 0 ? (
@@ -274,23 +274,23 @@ export default function GeneralHistory() {
                 <tr key={idx} className="hover:bg-brand-50/30 dark:hover:bg-slate-700/30 transition-colors text-[11px]">
                   <Td className="font-bold">{new Date(item.fe_registro).toLocaleDateString('es-PE')}</Td>
                   <Td className="text-brand-800 dark:text-brand-400 font-bold uppercase">{item.nombre_proveedor}</Td>
-                  <Td className="font-mono font-bold text-slate-500">{item.placa_asociada}</Td>
+                  <Td className="font-mono font-bold text-slate-500 dark:text-slate-400">{item.placa_asociada}</Td>
                   <Td>{item.capacidad_camion} m³</Td>
                   {/* Número de transporte limpio sin # */}
                   <Td className="bg-slate-50 dark:bg-slate-900/50 font-bold text-slate-700 dark:text-slate-300">
                     {item.nro_transporte}
                   </Td>
-                  <Td className={cn(new Date(item.fe_factura).getTime() === new Date(item.fe_registro).setHours(0,0,0,0) ? "text-amber-600 italic font-medium" : "")}>
+                  <Td className={cn(new Date(item.fe_factura).getTime() === new Date(item.fe_registro).setHours(0,0,0,0) ? "text-amber-600 dark:text-amber-400 italic font-medium" : "")}>
                     {new Date(item.fe_factura).toLocaleDateString('es-PE')}
                   </Td>
                   <Td>{item.canal}</Td>
                   <Td className="truncate max-w-[200px]">{item.nombre_destinatario}</Td>
                   <Td>{item.nombre_solicitante}</Td>
                   <Td>{item.zona}</Td>
-                  <Td className="font-bold text-brand-600">{item.tipo_gasto}</Td>
+                  <Td className="font-bold text-brand-600 dark:text-brand-400">{item.tipo_gasto}</Td>
                   <Td>{item.motivo}</Td>
                   <Td className="font-medium">S/ {item.ga_total_pen?.toFixed(2)}</Td>
-                  <Td className="truncate max-w-[200px] italic text-gray-400">"{item.ga_sustento}"</Td>
+                  <Td className="truncate max-w-[200px] italic text-gray-400 dark:text-gray-500">"{item.ga_sustento}"</Td>
                   <Td>{item.ff_ruta || '---'}</Td>
                   <Td>{item.ff_v_m3 || '---'}</Td>
                   <Td>{item.ff_p_unitario_pen || '---'}</Td>
@@ -302,13 +302,13 @@ export default function GeneralHistory() {
                   <Td>{item.monto_liquidar_carga_min_pen || '---'}</Td>
                   <Td>{item.monto_carga_min_programador || '---'}</Td>
                   <Td className="font-medium">{item.ceco}</Td>
-                  <Td className="font-mono text-[10px] text-gray-400">{item.id_ceco}</Td>
+                  <Td className="font-mono text-[10px] text-gray-400 dark:text-gray-500">{item.id_ceco}</Td>
                   <Td><BadgeStatus val={item.validacion_analista} /></Td>
                   <Td className="truncate max-w-[200px]">{item.comentarios_analista}</Td>
-                  <Td className="text-[10px] text-gray-400 italic">{item.correo_asunto}</Td>
+                  <Td className="text-[10px] text-gray-400 dark:text-gray-500 italic">{item.correo_asunto}</Td>
                   <Td className="font-bold text-center">{item.gasto_autorizado ? 'V' : 'F'}</Td>
                   <Td className="font-bold text-center">{item.pagar}</Td>
-                  <Td className="font-black bg-brand-50/50 text-brand-900 dark:text-brand-100">S/ {item.monto_total?.toFixed(2)}</Td>
+                  <Td className="font-black bg-brand-50/50 dark:bg-brand-900/20 text-brand-900 dark:text-brand-100">S/ {item.monto_total?.toFixed(2)}</Td>
                   <Td className="font-mono text-center">{item.posicion}</Td>
                   <Td className="font-mono text-center">{item.clase_de_condicion}</Td>
                   <Td className="font-mono text-center">{item.tipo_de_cuenta}</Td>
@@ -319,10 +319,10 @@ export default function GeneralHistory() {
         </div>
 
         {/* Paginación */}
-        <div className="p-4 bg-gray-50 dark:bg-slate-700/50 border-t flex justify-between items-center">
+        <div className="p-4 bg-gray-50 dark:bg-slate-700/50 border-t border-gray-100 dark:border-slate-600 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <span className="text-xs text-gray-500 font-medium">Página {currentPage} de {totalPages || 1}</span>
-            <span className="text-[10px] text-gray-400 bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-gray-100">Total registros: {totalCount}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Página {currentPage} de {totalPages || 1}</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-gray-100 dark:border-slate-600">Total registros: {totalCount}</span>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1 || loading}>
@@ -339,17 +339,17 @@ export default function GeneralHistory() {
 }
 
 // Helpers locales de diseño
-function Th({ children, className }) { return <th className={cn("px-4 py-4 text-[10px] font-bold uppercase text-gray-400 whitespace-nowrap bg-gray-50 dark:bg-slate-700 border-x border-gray-100 dark:border-slate-600", className)}>{children}</th>; }
-function Td({ children, className }) { return <td className={cn("px-4 py-3 border-b border-gray-50 dark:border-slate-700 text-gray-600 dark:text-gray-300 whitespace-nowrap", className)}>{children}</td>; }
+function Th({ children, className }) { return <th className={cn("px-4 py-4 text-[10px] font-bold uppercase text-gray-400 dark:text-gray-400 whitespace-nowrap bg-gray-50 dark:bg-slate-800 border-x border-gray-100 dark:border-slate-700", className)}>{children}</th>; }
+function Td({ children, className }) { return <td className={cn("px-4 py-3 border-b border-gray-50 dark:border-slate-700/50 text-gray-600 dark:text-gray-300 whitespace-nowrap", className)}>{children}</td>; }
 function FilterSelect({ label, value, options, onChange }) {
   return (
     <div className="space-y-1">
       <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{label}</label>
-      <select className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium outline-none shadow-sm cursor-pointer" value={value} onChange={(e) => onChange(e.target.value)}>
+      <select className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white outline-none shadow-sm cursor-pointer" value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((opt, i) => <option key={i} value={opt}>{opt === "all" ? "Todos" : opt}</option>)}
       </select>
     </div>
   );
 }
-function BadgeStatus({ val }) { return <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold border", val === 'VERDADERO' ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200")}>{val}</span>; }
-function BadgeFF({ status }) { return <span className={cn("px-2 py-0.5 rounded text-[9px] font-bold", status === 'OK' ? "text-green-600 bg-green-50" : status === 'Observado' ? "text-amber-600 bg-amber-50" : "text-gray-400")}>{status}</span>; }
+function BadgeStatus({ val }) { return <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold border", val === 'VERDADERO' ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800" : "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800")}>{val}</span>; }
+function BadgeFF({ status }) { return <span className={cn("px-2 py-0.5 rounded text-[9px] font-bold", status === 'OK' ? "text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/30" : status === 'Observado' ? "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30" : "text-gray-400")}>{status}</span>; }

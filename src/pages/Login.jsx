@@ -28,10 +28,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 dark:bg-slate-900">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors duration-300">
       
       {/* Tarjeta de Login */}
-      <div className="w-full max-w-[400px] bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+      <div className="w-full max-w-[400px] bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
         
         {/* Cabecera con Logo */}
         <div className="p-8 text-center bg-white dark:bg-slate-800 border-b border-gray-50 dark:border-slate-700/50">
@@ -45,7 +45,7 @@ export default function Login() {
             alt="Softys" 
             className="h-12 mx-auto object-contain mb-4 hidden dark:block" 
           />
-          <h1 className="text-2xl font-bold text-brand-700 dark:text-brand-500">LogiGastos</h1>
+          <h1 className="text-2xl font-bold text-brand-700 dark:text-brand-400">LogiGastos</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gestión de Gastos Logísticos</p>
         </div>
 
@@ -55,52 +55,52 @@ export default function Login() {
             
             {/* Input DNI */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Usuario (DNI / Código)</label>
+              <label className="text-sm font-semibold text-gray-700 dark:text-gray-200 ml-1">Usuario (DNI / Código)</label>
               <div className="relative">
-                <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 shrink-0" />
                 <Input 
                   placeholder="Ingresa tu documento" 
-                  className="pl-10"
+                  className="pl-10 bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700"
                   {...register("dni", { required: "El usuario es obligatorio" })}
                 />
               </div>
-              {errors.dni && <p className="text-red-500 text-xs">{errors.dni.message}</p>}
+              {errors.dni && <p className="text-red-500 dark:text-red-400 text-xs font-medium ml-1">{errors.dni.message}</p>}
             </div>
 
             {/* Input Password */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Contraseña</label>
+              <label className="text-sm font-semibold text-gray-700 dark:text-gray-200 ml-1">Contraseña</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 shrink-0" />
                 <Input 
                   type={showPassword ? "text" : "password"} 
                   placeholder="••••••" 
-                  className="pl-10 pr-10"
+                  className="pl-10 pr-10 bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700"
                   {...register("password", { required: "La contraseña es obligatoria" })}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none transition-colors"
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
-              {errors.password && <p className="text-red-500 text-xs">{errors.password.message}</p>}
+              {errors.password && <p className="text-red-500 dark:text-red-400 text-xs font-medium ml-1">{errors.password.message}</p>}
             </div>
 
             <Button 
               type="submit" 
-              className="w-full font-bold text-base"
+              className="w-full font-bold text-base h-12 shadow-lg shadow-brand-700/20 dark:shadow-none"
               isLoading={isSubmitting}
             >
               Iniciar Sesión
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-gray-400">
-              © 2026 Softys. Todos los derechos reservados.
+          <div className="mt-8 text-center">
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest font-bold">
+              © 2026 Softys. Anderson Cabanillas.
             </p>
           </div>
         </div>

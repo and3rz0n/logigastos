@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../utils/cn';
 import { 
   LayoutDashboard, 
@@ -15,11 +16,15 @@ import {
   ChevronRight,
   PieChart,
   BarChart,
-  Table
+  Table,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 
 export function Sidebar({ isOpen, setIsOpen }) {
   const { profile, signOut } = useAuth();
+  const { theme, cycleTheme } = useTheme();
   const location = useLocation();
 
   // Mantener el submenú abierto si estamos en alguna ruta de dashboard
@@ -106,12 +111,20 @@ export function Sidebar({ isOpen, setIsOpen }) {
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         
-        {/* Cabecera Sidebar */}
+        {/* Cabecera Sidebar (Logo Softys) */}
         <div className="flex items-center justify-between h-16 px-6 border-b border-gray-100 dark:border-slate-700/50 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-brand-700 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm">
-              L
-            </div>
+            <img 
+              src="/logo-softys.png" 
+              alt="Softys" 
+              className="h-8 w-auto object-contain dark:hidden" 
+            />
+            <img 
+              src="/logo-softys-white.png" 
+              alt="Softys" 
+              className="h-8 w-auto object-contain hidden dark:block" 
+            />
+            <div className="h-4 w-px bg-gray-300 dark:bg-slate-600 mx-1"></div>
             <span className="font-bold text-xl text-brand-900 dark:text-white tracking-tight">LogiGastos</span>
           </div>
           <button 
@@ -154,9 +167,9 @@ export function Sidebar({ isOpen, setIsOpen }) {
                         <button
                           onClick={() => setIsDashboardsOpen(!isDashboardsOpen)}
                           className={cn(
-                            "w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                            "w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 outline-none",
                             isDashboardsOpen 
-                              ? "bg-slate-50 dark:bg-slate-700/30 text-brand-700 dark:text-brand-400" 
+                              ? "bg-slate-50 dark:bg-slate-700/50 text-brand-700 dark:text-white" 
                               : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-gray-900 dark:hover:text-white"
                           )}
                         >
@@ -177,7 +190,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
                                 className={({ isActive }) => cn(
                                   "flex items-center gap-3 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200",
                                   isActive 
-                                    ? "bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/20 dark:text-brand-400" 
+                                    ? "bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/40 dark:text-white" 
                                     : "text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-300"
                                 )}
                               >
@@ -198,9 +211,9 @@ export function Sidebar({ isOpen, setIsOpen }) {
                       to={item.to}
                       onClick={() => setIsOpen(false)}
                       className={({ isActive }) => cn(
-                        "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                        "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 outline-none",
                         isActive 
-                          ? "bg-brand-50 text-brand-700 shadow-sm ring-1 ring-brand-100 dark:bg-brand-900/20 dark:text-brand-400 dark:ring-0" 
+                          ? "bg-brand-50 text-brand-700 shadow-sm ring-1 ring-brand-100 dark:bg-brand-900/40 dark:text-white dark:ring-brand-800" 
                           : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-gray-900 dark:hover:text-white"
                       )}
                     >
@@ -214,15 +227,38 @@ export function Sidebar({ isOpen, setIsOpen }) {
           })}
         </nav>
 
-        {/* Footer: Cerrar Sesión */}
-        <div className="p-4 border-t border-gray-100 dark:border-slate-700/50 bg-white dark:bg-slate-800 shrink-0">
-          <button 
-            onClick={signOut}
-            className="flex items-center gap-3 px-4 py-3 w-full text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-xl transition-colors group"
-          >
-            <LogOut className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
-            Cerrar Sesión
-          </button>
+        {/* Footer: Apariencia, Cerrar Sesión y Copyright */}
+        <div className="border-t border-gray-100 dark:border-slate-700/50 bg-white dark:bg-slate-800 shrink-0">
+          <div className="p-4 space-y-2">
+            
+            {/* Botón Toggle Modo Oscuro */}
+            <button
+              onClick={cycleTheme}
+              className="flex items-center justify-between px-4 py-3 w-full text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors outline-none"
+            >
+              <div className="flex items-center gap-3">
+                {theme === 'light' && <Sun className="w-5 h-5 shrink-0 text-brand-500" />}
+                {theme === 'dark' && <Moon className="w-5 h-5 shrink-0 text-brand-400" />}
+                {theme === 'system' && <Monitor className="w-5 h-5 shrink-0 text-gray-500" />}
+                <span>Apariencia: <span className="capitalize">{theme}</span></span>
+              </div>
+            </button>
+
+            {/* Botón Cerrar Sesión */}
+            <button 
+              onClick={signOut}
+              className="flex items-center gap-3 px-4 py-3 w-full text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-xl transition-colors group outline-none"
+            >
+              <LogOut className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
+              Cerrar Sesión
+            </button>
+          </div>
+          
+          <footer className="app-footer px-4 pb-4 pt-1 text-center">
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-tight">
+              &copy; Copyright {new Date().getFullYear()} Todos los derechos reservados a Anderson Cabanillas.
+            </p>
+          </footer>
         </div>
 
       </aside>

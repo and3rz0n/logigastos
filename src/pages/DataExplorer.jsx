@@ -3,7 +3,8 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getDataExplorerRequests } from '../services/requests';
 import { 
-  Table, Search, Download, Filter, Building, FileText, Calendar, CalendarDays
+  Table, Search, Download, Filter, Building, FileText, Calendar, CalendarDays,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -19,6 +20,10 @@ export default function DataExplorer() {
   const [filterTipo, setFilterTipo] = useState("all");
   const [filterYear, setFilterYear] = useState("all");
   const [filterMonth, setFilterMonth] = useState("all");
+
+  // --- ESTADOS DE PAGINACIÓN ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
 
   // --- ENRUTADOR INTELIGENTE POR ROL ---
   const userRole = profile?.rol || '';
@@ -43,6 +48,11 @@ export default function DataExplorer() {
     fetchData();
   }, [canSeeGlobalDashboards]);
 
+  // Resetear la página a 1 cada vez que se aplica un filtro
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterArea, filterTipo, filterYear, filterMonth]);
+
   if (profile && !canSeeGlobalDashboards) {
     return <Navigate to="/dashboard/personal" replace />;
   }
@@ -64,49 +74,37 @@ export default function DataExplorer() {
     return matchesSearch && matchesArea && matchesTipo && matchesMonth && matchesYear;
   });
 
-  // --- LÓGICA: DESCARGAR SÚPER EXCEL (CSV 34 COLUMNAS) ---
+  // --- LÓGICA DE PAGINACIÓN ---
+  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
+  const paginatedData = filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  // --- LÓGICA: EXPORTACIÓN INTELIGENTE (SOLO 10 COLUMNAS) ---
   const handleExportExcel = () => {
     if (filteredData.length === 0) return;
 
-    // Encabezados estandarizados para SAP / Auditoría
+    // Verificamos si el usuario ha aplicado algún filtro
+    const hasFilters = searchTerm !== "" || filterArea !== "all" || filterTipo !== "all" || filterYear !== "all" || filterMonth !== "all";
+
+    // Regla: Si hay filtros, exporta todo lo filtrado. Si no, exporta solo la primera página.
+    const recordsToExport = hasFilters ? filteredData : filteredData.slice(0, pageSize);
+
+    // Las 10 columnas exactas de la tabla visual
     const headers = [
-      'Mes', 'Año', 'Fe. Registro', 'Nombre del Proveedor', 'Placa Asociada', 'Capacidad (m3)',
-      'Nro. Transporte', 'Fe. Factura', 'Canal', 'Oficina de Venta', 'Código Destinatario', 
-      'Nombre Destinatario', 'Nombre Solicitante', 'Zona', 'Tipo Gasto', 'Motivo',
-      'Área Atribuible', 'ID CeCo', 'Validación Analista', 'Gasto Autorizado',
-      'Comentarios Analista', 'Estado', 'Monto Total (S/)', 'Cant. días', 'Categoría',
-      'Posición', 'Clase de condición', 'Tipo de cuenta'
+      'MES', 'N° TRANSPORTE', 'NOMBRE PROVEEDOR', 'NOMBRE DESTINATARIO', 
+      'PLACA', 'ZONA', 'TIPO DE GASTO', 'FE. FACTURA', 'ÁREA ATRIBUIBLE', 'MONTO'
     ];
 
-    const rows = filteredData.map(row => [
+    const rows = recordsToExport.map(row => [
       row.mes || '',
-      row.anio || '',
-      row.fecha_registro || '',
-      `"${row.nombre_proveedor || ''}"`,
-      row.placa || '',
-      row.capacidad || 0,
       row.picking || '',
-      row.fecha_factura || '',
-      `"${row.canal || ''}"`,
-      `"${row.oficina_venta || ''}"`,
-      `"${row.codigo_destinatario || ''}"`,
+      `"${row.nombre_proveedor || ''}"`,
       `"${row.nombre_destinatario || ''}"`,
-      `"${row.nombre_solicitante || ''}"`,
-      `"${row.zona || ''}"`,
+      row.placa || '',
+      row.zona || '',
       `"${row.tipo_gasto || ''}"`,
-      `"${row.motivo || ''}"`,
-      `"${row.area_atribuible || ''}"`,
-      `"${row.id_ceco || ''}"`,
-      row.validacion_analista || 'FALSO',
-      row.gasto_autorizado || 'FALSO',
-      `"${row.comentarios_analista || ''}"`,
-      row.estado || '',
-      row.monto_total || 0,
-      row.cant_dias || 0,
-      row.categoria || '',
-      row.sap_posicion || '',
-      row.sap_condicion || '',
-      row.sap_cuenta || ''
+      row.fecha_factura || '',
+      `"${row.area_atribuible || ''} ${row.id_ceco ? '('+row.id_ceco+')' : ''}"`,
+      row.monto_total || 0
     ]);
 
     const csvContent = [
@@ -120,7 +118,7 @@ export default function DataExplorer() {
     const link = document.createElement('a');
     link.href = url;
     const today = new Date().toISOString().split('T')[0];
-    link.setAttribute('download', `Historial_General_SAP_${today}.csv`);
+    link.setAttribute('download', `Reporte_Explorador_${today}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -170,7 +168,7 @@ export default function DataExplorer() {
                 <div className="relative min-w-[120px]">
                     <CalendarDays className="absolute left-3 top-3 h-4 w-4 text-brand-600" />
                     <select 
-                        className="h-10 w-full pl-9 pr-8 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
+                        className="h-10 w-full pl-9 pr-8 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-xs font-bold dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
                         value={filterYear}
                         onChange={(e) => setFilterYear(e.target.value)}
                     >
@@ -183,7 +181,7 @@ export default function DataExplorer() {
                 <div className="relative min-w-[140px]">
                     <Calendar className="absolute left-3 top-3 h-4 w-4 text-brand-600" />
                     <select 
-                        className="h-10 w-full pl-9 pr-8 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
+                        className="h-10 w-full pl-9 pr-8 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-xs font-bold dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
                         value={filterMonth}
                         onChange={(e) => setFilterMonth(e.target.value)}
                     >
@@ -210,7 +208,7 @@ export default function DataExplorer() {
           <div className="relative min-w-[180px]">
               <Building className="absolute left-3 top-3 h-4 w-4 text-brand-600" />
               <select 
-                className="h-10 w-full pl-9 pr-8 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
+                className="h-10 w-full pl-9 pr-8 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-xs font-bold dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
                 value={filterArea}
                 onChange={(e) => setFilterArea(e.target.value)}
               >
@@ -225,7 +223,7 @@ export default function DataExplorer() {
           <div className="relative min-w-[180px]">
               <FileText className="absolute left-3 top-3 h-4 w-4 text-brand-600" />
               <select 
-                className="h-10 w-full pl-9 pr-8 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
+                className="h-10 w-full pl-9 pr-8 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-xs font-bold dark:text-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer"
                 value={filterTipo}
                 onChange={(e) => setFilterTipo(e.target.value)}
               >
@@ -257,10 +255,10 @@ export default function DataExplorer() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
-              {filteredData.length > 0 ? (
-                filteredData.map((row) => (
+              {paginatedData.length > 0 ? (
+                paginatedData.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group">
-                    <td className="px-4 py-4 text-gray-500 capitalize">{row.mes}</td>
+                    <td className="px-4 py-4 text-gray-500 dark:text-gray-400 capitalize">{row.mes}</td>
                     <td className="px-4 py-4 font-bold text-gray-900 dark:text-white whitespace-nowrap">{row.picking}</td>
                     
                     {/* Forzamos salto de línea natural en lugar de "..." */}
@@ -278,9 +276,9 @@ export default function DataExplorer() {
                       </span>
                     </td>
                     
-                    <td className="px-4 py-4 text-gray-500">{row.zona}</td>
+                    <td className="px-4 py-4 text-gray-500 dark:text-gray-400">{row.zona}</td>
                     <td className="px-4 py-4 text-gray-600 dark:text-gray-300 text-xs">{row.tipo_gasto}</td>
-                    <td className="px-4 py-4 text-gray-500 whitespace-nowrap">{row.fecha_factura}</td>
+                    <td className="px-4 py-4 text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.fecha_factura}</td>
                     <td className="px-4 py-4 font-medium text-gray-700 dark:text-gray-300">
                       {row.area_atribuible}
                       <div className="text-[10px] text-gray-400 font-normal">{row.id_ceco}</div>
@@ -296,7 +294,7 @@ export default function DataExplorer() {
                 <tr>
                   <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center">
-                        <Search className="w-8 h-8 text-gray-300 mb-2" />
+                        <Search className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-2" />
                         <p>No se encontraron registros con los filtros actuales.</p>
                     </div>
                   </td>
@@ -305,12 +303,37 @@ export default function DataExplorer() {
             </tbody>
           </table>
         </div>
-        {/* Footer de la tabla con totalizador */}
-        <div className="bg-gray-50 dark:bg-slate-900/50 p-4 border-t border-gray-100 dark:border-slate-700 flex justify-end items-center gap-4">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Filtrado:</span>
-            <span className="text-xl font-black text-brand-700 dark:text-brand-400">
-                S/ {filteredData.reduce((sum, row) => sum + (row.monto_total || 0), 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-            </span>
+        
+        {/* Footer de la tabla con Paginación y Totalizador */}
+        <div className="bg-gray-50 dark:bg-slate-900/50 p-4 border-t border-gray-100 dark:border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            {/* Controles de Paginación */}
+            <div className="flex items-center gap-2">
+               <button 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-30 transition-colors"
+               >
+                 <ChevronLeft className="w-4 h-4 dark:text-white" />
+               </button>
+               <span className="text-xs font-bold text-gray-600 dark:text-gray-400 px-2">
+                 Página {currentPage} de {totalPages}
+               </span>
+               <button 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-30 transition-colors"
+               >
+                 <ChevronRight className="w-4 h-4 dark:text-white" />
+               </button>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Filtrado:</span>
+              <span className="text-xl font-black text-brand-700 dark:text-brand-400">
+                  S/ {filteredData.reduce((sum, row) => sum + (row.monto_total || 0), 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
         </div>
       </div>
     </div>

@@ -68,7 +68,7 @@ export const getMaestrosOpciones = async () => {
   }
 };
 
-// --- NUEVOS MAESTROS: REGLAS DE NEGOCIO Y SAP ---
+// --- REGLAS DE NEGOCIO Y SAP ---
 export const updateZonaPorcentaje = async (id, porcentaje) => {
   try {
     const { error } = await supabase
@@ -193,7 +193,7 @@ export const getApprovers = async () => {
   }
 };
 
-// --- ESCRITURA Y VALIDACIÓN ---
+// --- ESCRITURA Y VALIDACIÓN (Siguen usando la tabla base) ---
 export const checkDuplicateRequest = async (transportistaId, picking, tipoGasto, motivoGasto) => {
   try {
     const { data, error } = await supabase
@@ -276,154 +276,133 @@ export const createRequest = async (data) => {
   }
 };
 
-// --- LECTURA DE SOLICITUDES ---
-export const getMyRequests = async (userProfile) => {
+// --- LECTURA DE SOLICITUDES DESDE LA VISTA (Para Búsqueda Global y Paginación) ---
+
+export const getMyRequests = async (userProfile, page = 1, searchTerm = "", statusFilter = "all") => {
   try {
+    const from = (page - 1) * 10;
+    const to = from + 9;
     const isAdminOrDev = userProfile.rol === 'admin' || userProfile.rol === 'developer';
 
     let query = supabase
-      .from('solicitudes_gastos')
-      .select(`
-        id, created_at, nro_transporte_sap, tipo_gasto, total_gasto, estado, fecha_factura, zona, motivo_rechazo, usuario_id, resolutor_id,
-        transportista:profiles!solicitudes_gastos_transportista_id_fkey ( nombre_completo ),
-        aprobador:profiles!solicitudes_gastos_usuario_id_fkey ( nombre_completo ),
-        resolutor:profiles!solicitudes_gastos_resolutor_id_fkey ( nombre_completo ),
-        updated_at
-      `)
-      .order('created_at', { ascending: false });
+      .from('view_solicitudes_operativas')
+      .select('*', { count: 'exact' });
 
     if (!isAdminOrDev) {
       query = query.eq('transportista_id', userProfile.id);
     }
 
-    const { data, error } = await query;
+    if (statusFilter !== "all") {
+      query = query.eq('estado', statusFilter);
+    }
+
+    if (searchTerm) {
+      let filter = `nro_transporte_sap.ilike.%${searchTerm}%,nombre_aprobador_asignado.ilike.%${searchTerm}%`;
+      if (isAdminOrDev) {
+        filter += `,nombre_transportista.ilike.%${searchTerm}%`;
+      }
+      query = query.or(filter);
+    }
+
+    const { data, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
     if (error) throw error;
-    
-    return data.map(item => ({
-      ...item,
-      nombre_transportista: item.transportista?.nombre_completo || 'Desconocido',
-      nombre_aprobador: item.aprobador?.nombre_completo || 'Sin asignar',
-      nombre_resolutor: item.resolutor?.nombre_completo || null
-    }));
+    return { data: data || [], totalCount: count || 0 };
   } catch (error) {
     console.error("Error getMyRequests:", error);
-    return [];
+    return { data: [], totalCount: 0 };
   }
 };
 
-export const getPendingApprovals = async (userProfile) => {
+export const getPendingApprovals = async (userProfile, page = 1, searchTerm = "") => {
   try {
+    const from = (page - 1) * 10;
+    const to = from + 9;
+
     let query = supabase
-      .from('solicitudes_gastos')
-      .select(`
-        *,
-        transportista:profiles!solicitudes_gastos_transportista_id_fkey ( nombre_completo ),
-        vehiculo:vehiculos!solicitudes_gastos_vehiculo_id_fkey ( placa, capacidad_m3 ),
-        area:maestro_areas!solicitudes_gastos_area_atribuible_id_fkey ( nombre, id_ceco ),
-        destinatario:destinatarios ( codigo_destinatario, nombre_destinatario, canal ),
-        aprobador_asignado:profiles!solicitudes_gastos_usuario_id_fkey ( nombre_completo )
-      `)
-      .eq('estado', 'pendiente')
-      .order('created_at', { ascending: true });
+      .from('view_solicitudes_operativas')
+      .select('*', { count: 'exact' })
+      .eq('estado', 'pendiente');
 
     if (userProfile.rol === 'aprobador') {
         query = query.eq('usuario_id', userProfile.id);
     }
-    const { data, error } = await query;
-    if (error) throw error;
 
-    return data.map(item => ({
-      ...item,
-      nombre_transportista: item.transportista?.nombre_completo || 'Desconocido',
-      placa_vehiculo: item.vehiculo?.placa || '---',
-      capacidad_vehiculo: item.vehiculo?.capacidad_m3 || 0,
-      nombre_area: item.area?.nombre || 'No asignada',
-      id_ceco: item.area?.id_ceco || '---',
-      codigo_cliente: item.destinatario?.codigo_destinatario || '---',
-      nombre_cliente: item.destinatario?.nombre_destinatario || 'Cliente Desconocido',
-      canal_cliente: item.destinatario?.canal || '---',
-      nombre_aprobador_asignado: item.aprobador_asignado?.nombre_completo || 'Desconocido',
-      transportista: null, vehiculo: null, area: null, destinatario: null, aprobador_asignado: null
-    }));
+    if (searchTerm) {
+      query = query.or(`nro_transporte_sap.ilike.%${searchTerm}%,nombre_transportista.ilike.%${searchTerm}%,placa_vehiculo.ilike.%${searchTerm}%,nombre_aprobador_asignado.ilike.%${searchTerm}%`);
+    }
+
+    const { data, error, count } = await query
+      .order('created_at', { ascending: true })
+      .range(from, to);
+
+    if (error) throw error;
+    return { data: data || [], totalCount: count || 0 };
   } catch (error) {
-    return [];
+    console.error("Error getPendingApprovals:", error);
+    return { data: [], totalCount: 0 };
   }
 };
 
-// --- MÓDULO DE PAGOS ---
-export const getApprovedForPayment = async () => {
+export const getApprovedForPayment = async (page = 1, searchTerm = "") => {
   try {
-    const { data, error } = await supabase
-      .from('solicitudes_gastos')
-      .select(`
-        *,
-        transportista:profiles!solicitudes_gastos_transportista_id_fkey ( nombre_completo ),
-        vehiculo:vehiculos!solicitudes_gastos_vehiculo_id_fkey ( placa, capacidad_m3 ),
-        area:maestro_areas!solicitudes_gastos_area_atribuible_id_fkey ( nombre ),
-        destinatario:destinatarios ( codigo_destinatario, nombre_destinatario, canal ),
-        aprobador_asignado:profiles!solicitudes_gastos_usuario_id_fkey ( nombre_completo ),
-        aprobador_real:profiles!solicitudes_gastos_aprobador_real_id_fkey ( nombre_completo )
-      `)
-      .eq('estado', 'aprobado')
-      .order('updated_at', { ascending: false }); 
-    if (error) throw error;
+    const from = (page - 1) * 10;
+    const to = from + 9;
 
-    return data.map(item => ({
-      ...item,
-      nombre_transportista: item.transportista?.nombre_completo || 'Desconocido',
-      placa_vehiculo: item.vehiculo?.placa || '---',
-      nombre_area: item.area?.nombre || 'General',
-      nombre_cliente: item.destinatario?.nombre_destinatario || 'Desconocido',
-      nombre_aprobador_asignado: item.aprobador_asignado?.nombre_completo || 'Desconocido',
-      nombre_aprobador_real: item.aprobador_real?.nombre_completo || 'N/A',
-      transportista: null, vehiculo: null, area: null, destinatario: null, aprobador_asignado: null, aprobador_real: null
-    }));
+    let query = supabase
+      .from('view_solicitudes_operativas')
+      .select('*', { count: 'exact' })
+      .eq('estado', 'aprobado');
+
+    if (searchTerm) {
+      query = query.or(`nro_transporte_sap.ilike.%${searchTerm}%,nombre_transportista.ilike.%${searchTerm}%,nombre_aprobador_real.ilike.%${searchTerm}%`);
+    }
+
+    const { data, error, count } = await query
+      .order('updated_at', { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+    return { data: data || [], totalCount: count || 0 };
   } catch (error) {
-    return [];
+    console.error("Error getApprovedForPayment:", error);
+    return { data: [], totalCount: 0 };
   }
 };
 
-export const getPaidHistory = async () => {
+export const getPaidHistory = async (page = 1, searchTerm = "", dateFrom = "", dateTo = "") => {
   try {
-    const { data, error } = await supabase
-      .from('solicitudes_gastos')
-      .select(`
-        *,
-        transportista:profiles!solicitudes_gastos_transportista_id_fkey ( nombre_completo ),
-        pagador:profiles!solicitudes_gastos_pagador_id_fkey ( nombre_completo )
-      `)
-      .eq('estado', 'pagado')
-      .order('updated_at', { ascending: false });
+    const from = (page - 1) * 10;
+    const to = from + 9;
+
+    let query = supabase
+      .from('view_solicitudes_operativas')
+      .select('*', { count: 'exact' })
+      .eq('estado', 'pagado');
+
+    if (searchTerm) {
+      query = query.or(`nro_transporte_sap.ilike.%${searchTerm}%,nombre_transportista.ilike.%${searchTerm}%,nombre_pagador.ilike.%${searchTerm}%`);
+    }
+
+    if (dateFrom) query = query.gte('fecha_factura', dateFrom);
+    if (dateTo) query = query.lte('fecha_factura', dateTo);
+
+    const { data, error, count } = await query
+      .order('updated_at', { ascending: false })
+      .range(from, to);
+
     if (error) throw error;
-    return data.map(item => ({
-      ...item,
-      nombre_transportista: item.transportista?.nombre_completo || 'Desconocido',
-      nombre_pagador: item.pagador?.nombre_completo || 'Sistema',
-      transportista: null, pagador: null
-    }));
+    return { data: data || [], totalCount: count || 0 };
   } catch (error) {
-    return [];
+    console.error("Error getPaidHistory:", error);
+    return { data: [], totalCount: 0 };
   }
 };
 
-export const processBatchPayments = async (requestIds, currentUserId) => {
-  try {
-    const { error } = await supabase
-      .from('solicitudes_gastos')
-      .update({ 
-        estado: 'pagado', 
-        updated_at: new Date().toISOString(),
-        pagador_id: currentUserId 
-      })
-      .in('id', requestIds);
-    if (error) throw error;
-    return { success: true };
-  } catch (error) {
-    throw error;
-  }
-};
+// --- ACCIONES (Escritura en tabla base) ---
 
-// --- ACTUALIZACIÓN DE ESTADOS ---
 export const updateRequestStatus = async (requestId, newStatus, currentUserId, rejectionReason = null) => {
   try {
     const updateData = { 
@@ -447,9 +426,23 @@ export const updateRequestStatus = async (requestId, newStatus, currentUserId, r
   }
 };
 
-/**
- * --- MEJORA 2026: HISTORIAL GENERAL CON FILTROS EN SERVIDOR Y ZONA HORARIA ---
- */
+export const processBatchPayments = async (requestIds, currentUserId) => {
+  try {
+    const { error } = await supabase
+      .from('solicitudes_gastos')
+      .update({ 
+        estado: 'pagado', 
+        updated_at: new Date().toISOString(),
+        pagador_id: currentUserId 
+      })
+      .in('id', requestIds);
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    throw error;
+  }
+};
+
 export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm = "", filters = {}) => {
   try {
     const from = (page - 1) * pageSize;
@@ -470,7 +463,6 @@ export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm 
     if (filters.clase_de_condicion && filters.clase_de_condicion !== 'all') query = query.eq('clase_de_condicion', filters.clase_de_condicion);
     if (filters.tipo_de_cuenta && filters.tipo_de_cuenta !== 'all') query = query.eq('tipo_de_cuenta', filters.tipo_de_cuenta);
     
-    // MEJORA: Filtros con zona horaria de Perú (-05:00) para evitar desfase de un día
     if (filters.fe_registro) {
       query = query
         .gte('fe_registro', `${filters.fe_registro}T00:00:00-05:00`)
@@ -496,9 +488,6 @@ export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm 
   }
 };
 
-/**
- * --- NUEVO: EXPORTACIÓN TOTAL FILTRADA CON ZONA HORARIA ---
- */
 export const getAllGeneralHistoryDataFiltered = async (searchTerm = "", filters = {}) => {
   try {
     let query = supabase.from('view_historial_general').select('*');
@@ -514,7 +503,6 @@ export const getAllGeneralHistoryDataFiltered = async (searchTerm = "", filters 
     if (filters.clase_de_condicion && filters.clase_de_condicion !== 'all') query = query.eq('clase_de_condicion', filters.clase_de_condicion);
     if (filters.tipo_de_cuenta && filters.tipo_de_cuenta !== 'all') query = query.eq('tipo_de_cuenta', filters.tipo_de_cuenta);
     
-    // MEJORA: Filtros con zona horaria de Perú (-05:00)
     if (filters.fe_registro) {
       query = query
         .gte('fe_registro', `${filters.fe_registro}T00:00:00-05:00`)
@@ -534,9 +522,6 @@ export const getAllGeneralHistoryDataFiltered = async (searchTerm = "", filters 
   }
 };
 
-/**
- * --- NUEVO 2026: FILTROS DINÁMICOS SAP CORREGIDOS ---
- */
 export const getGeneralHistoryUniqueFilters = async () => {
   try {
     const [p, c, a] = await Promise.all([
@@ -556,7 +541,6 @@ export const getGeneralHistoryUniqueFilters = async () => {
   }
 };
 
-// --- EXPLORADOR DE DATOS (MÉTODO ALTERNATIVO EXISTENTE) ---
 export const getDataExplorerRequests = async () => {
   try {
     const { data, error } = await supabase
