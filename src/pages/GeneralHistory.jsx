@@ -158,7 +158,7 @@ export default function GeneralHistory() {
           className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-lg shadow-emerald-500/20 disabled:bg-gray-400 disabled:shadow-none px-6 h-11"
         >
           <Download className="w-4 h-4" />
-          {isExporting ? "Procesando..." : `Exportar ( ${isFiltered ? totalCount : data.length} )`}
+          {isExporting ? "Procesando..." : `Exportar Excel ( ${isFiltered ? totalCount : data.length} Registros)`}
         </Button>
       </div>
 
