@@ -1,5 +1,32 @@
 import { supabase } from './supabase';
 
+/**
+ * FUNCIÓN AUXILIAR DE PAGINACIÓN INTERNA
+ * Permite saltar el límite de 1000 filas de Supabase
+ */
+const fetchAllPages = async (queryBuilder) => {
+  let allData = [];
+  let from = 0;
+  let step = 1000;
+  let keepFetching = true;
+
+  while (keepFetching) {
+    const { data, error } = await queryBuilder.range(from, from + step - 1);
+    if (error) throw error;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < step) {
+        keepFetching = false;
+      } else {
+        from += step;
+      }
+    } else {
+      keepFetching = false;
+    }
+  }
+  return allData;
+};
+
 // --- UTILIDADES DE FECHA ---
 export const getTodayPeru = () => {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
@@ -168,13 +195,31 @@ export const saveVehicle = async (payload) => {
 // --- DESTINATARIOS ---
 export const getDestinatarioByCode = async (code) => {
   try {
+    // 1. Buscamos TODOS los registros que coincidan con el código
     const { data, error } = await supabase
       .from('destinatarios')
       .select('id, nombre_destinatario, canal, oficina_venta')
-      .eq('codigo_destinatario', code)
-      .single();
+      .eq('codigo_destinatario', code);
+      
     if (error) return null;
-    return data;
+    if (!data || data.length === 0) return null; // No existe el código
+
+    // 2. Filtramos buscando el candidato ideal (el que sí tenga un nombre escrito)
+    const validCandidate = data.find(item => 
+      item.nombre_destinatario && item.nombre_destinatario.trim() !== ''
+    );
+
+    // 3. Si encontramos uno bueno, lo devolvemos
+    if (validCandidate) {
+      return validCandidate;
+    }
+
+    // 4. Plan B: Si todos están vacíos, tomamos el primero pero le inyectamos un texto de aviso
+    const fallbackData = { ...data[0] }; 
+    fallbackData.nombre_destinatario = 'Código Destinatario sin datos';
+    
+    return fallbackData;
+
   } catch {
     return null;
   }
@@ -600,5 +645,61 @@ export const getDataExplorerRequests = async () => {
   } catch (error) {
     console.error('Error Explorador:', error);
     return [];
+  }
+};
+
+// ============================================================================
+// NUEVAS FUNCIONES PARA EL MAESTRO DE CLIENTES (DESTINATARIOS)
+// ============================================================================
+
+export const getAllDestinatarios = async () => {
+  try {
+    let query = supabase.from('destinatarios').select('*');
+    
+    // Uso de la función maestra para ignorar el límite de 1000 registros
+    const allData = await fetchAllPages(query);
+    return allData;
+  } catch (error) {
+    console.error('Error cargando destinatarios:', error);
+    return [];
+  }
+};
+
+export const saveDestinatario = async (payload) => {
+  try {
+    const dataToSave = {
+      ...payload,
+      codigo_solicitante: payload.codigo_solicitante || payload.codigo_destinatario,
+      nombre_solicitante: payload.nombre_solicitante || payload.nombre_destinatario
+    };
+
+    if (payload.id) {
+      const { error } = await supabase
+        .from('destinatarios')
+        .update(dataToSave)
+        .eq('id', payload.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('destinatarios')
+        .insert([dataToSave]);
+      if (error) throw error;
+    }
+    return { success: true };
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const toggleDestinatarioStatus = async (id, currentStatus) => {
+  try {
+    const { error } = await supabase
+      .from('destinatarios')
+      .update({ activo: !currentStatus })
+      .eq('id', id);
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    throw error;
   }
 };

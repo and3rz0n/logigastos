@@ -3,13 +3,14 @@ import { toast } from 'sonner';
 import { 
   Users, Truck, Map, Briefcase, Plus, Edit2, 
   Trash2, Save, X, Search, Phone, Shield, Power, CheckCircle, AlertCircle, Eye, EyeOff, Settings2, Car,
-  ChevronLeft, ChevronRight, Hash, DollarSign, Tag, FilterX, Filter
+  ChevronLeft, ChevronRight, Hash, DollarSign, Tag, FilterX, Filter, Building2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { 
   getSystemConfig, updateSystemConfig, getAllVehicles, saveVehicle, 
-  getSapMappings, saveSapMapping, updateZonaPorcentaje 
+  getSapMappings, saveSapMapping, updateZonaPorcentaje,
+  getAllDestinatarios, saveDestinatario, toggleDestinatarioStatus
 } from '../services/requests';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -46,6 +47,7 @@ export default function Settings() {
       {/* Menú de Pestañas Mejorado */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-700 pb-1">
         <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={Users} label="Usuarios" />
+        <TabButton active={activeTab === 'clientes'} onClick={() => setActiveTab('clientes')} icon={Building2} label="Clientes" />
         <TabButton active={activeTab === 'vehiculos'} onClick={() => setActiveTab('vehiculos')} icon={Car} label="Flota" />
         <TabButton active={activeTab === 'areas'} onClick={() => setActiveTab('areas')} icon={Briefcase} label="Áreas (CeCo)" />
         <TabButton active={activeTab === 'sap'} onClick={() => setActiveTab('sap')} icon={DollarSign} label="Cuentas SAP" />
@@ -57,6 +59,7 @@ export default function Settings() {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 min-h-[400px]">
         {activeTab === 'users' && <UsersManager currentUser={profile} />}
+        {activeTab === 'clientes' && <ClientesManager />}
         {activeTab === 'vehiculos' && <VehiclesManager />}
         {activeTab === 'areas' && <AreasManager />}
         {activeTab === 'sap' && <SapAccountManager />}
@@ -65,6 +68,280 @@ export default function Settings() {
         {activeTab === 'operaciones' && <AdvancedMasterManager />}
         {activeTab === 'sistema' && <SystemManager />}
       </div>
+    </div>
+  );
+}
+
+// --- SUB-COMPONENTE: GESTIÓN DE CLIENTES (DESTINATARIOS) ---
+function ClientesManager() {
+  const [clientes, setClientes] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  const [showInactives, setShowInactives] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const [formData, setFormData] = useState({ 
+    codigo_destinatario: '', 
+    nombre_destinatario: '', 
+    canal: '', 
+    oficina_venta: '',
+    codigo_solicitante: '',
+    nombre_solicitante: '',
+    activo: true 
+  });
+
+  useEffect(() => { loadData(); }, []);
+  
+  // Cuando el usuario busca o cambia de pestaña, regresamos a la página 1
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, showInactives]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const rawData = await getAllDestinatarios();
+    
+    // ORDENAMIENTO DE DATOS AL DESCARGAR
+    const sortedData = (rawData || []).sort((a, b) => {
+        // 1. Condición de "Completitud": Si uno está vacío y el otro no, el vacío va al final
+        const aIsEmpty = !a.codigo_destinatario || !a.nombre_destinatario;
+        const bIsEmpty = !b.codigo_destinatario || !b.nombre_destinatario;
+        
+        if (aIsEmpty && !bIsEmpty) return 1;  // A va al fondo
+        if (!aIsEmpty && bIsEmpty) return -1; // B va al fondo
+        
+        // 2. Condición Alfabética (A-Z) para los que están en la misma categoría
+        const nameA = (a.nombre_destinatario || '').toLowerCase();
+        const nameB = (b.nombre_destinatario || '').toLowerCase();
+        return nameA.localeCompare(nameB, 'es');
+    });
+
+    setClientes(sortedData);
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    if (!formData.codigo_destinatario || !formData.nombre_destinatario || !formData.canal) {
+      return toast.error("El Código, Nombre y Canal son obligatorios.");
+    }
+    try {
+      await saveDestinatario({ ...formData, id: editingItem?.id });
+      toast.success(editingItem ? "Cliente actualizado" : "Cliente registrado");
+      setIsModalOpen(false);
+      loadData();
+    } catch (err) {
+      toast.error("Error al guardar el cliente");
+    }
+  };
+
+  const openNew = () => {
+    setEditingItem(null);
+    setFormData({ 
+        codigo_destinatario: '', nombre_destinatario: '', canal: '', oficina_venta: '',
+        codigo_solicitante: '', nombre_solicitante: '', activo: true 
+    });
+    setIsModalOpen(true);
+  };
+
+  const openEdit = (item) => {
+    setEditingItem(item);
+    setFormData({ 
+        codigo_destinatario: item.codigo_destinatario || '', 
+        nombre_destinatario: item.nombre_destinatario || '', 
+        canal: item.canal || '', 
+        oficina_venta: item.oficina_venta || '',
+        codigo_solicitante: item.codigo_solicitante || '',
+        nombre_solicitante: item.nombre_solicitante || '',
+        activo: item.activo 
+    });
+    setIsModalOpen(true);
+  };
+
+  const toggleStatus = async (id, currentStatus) => {
+    try {
+      await toggleDestinatarioStatus(id, currentStatus);
+      loadData();
+    } catch (error) {
+      toast.error("Error al cambiar el estado");
+    }
+  };
+
+  // BUSCADOR GLOBAL: Se filtra primero TODA la base de datos descargada
+  const filteredClientes = clientes.filter(c => {
+    const term = searchQuery.toLowerCase();
+    const matchesSearch = 
+        (c.codigo_destinatario && c.codigo_destinatario.toLowerCase().includes(term)) || 
+        (c.nombre_destinatario && c.nombre_destinatario.toLowerCase().includes(term)) ||
+        (c.canal && c.canal.toLowerCase().includes(term));
+    const matchesStatus = showInactives ? !c.activo : c.activo;
+    return matchesSearch && matchesStatus;
+  });
+
+  // PAGINACIÓN: Se aplica SOLAMENTE a los resultados ya filtrados
+  const totalPages = Math.ceil(filteredClientes.length / ITEMS_PER_PAGE) || 1;
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedClientes = filteredClientes.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h3 className="font-bold text-lg text-gray-900 dark:text-white">Directorio de Clientes</h3>
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-3">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <Input placeholder="Buscar por código, nombre o canal..." className="pl-9 h-10 text-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          </div>
+          <Button 
+            variant={showInactives ? "default" : "outline"} 
+            onClick={() => setShowInactives(!showInactives)} 
+            className={cn("gap-2", showInactives && "bg-gray-800 text-white hover:bg-gray-900")}
+          >
+            {showInactives ? <FilterX className="w-4 h-4" /> : <Filter className="w-4 h-4" />}
+            {showInactives ? "Activos" : "Inactivos"}
+          </Button>
+          <Button onClick={openNew} className="gap-2 whitespace-nowrap"><Plus className="w-4 h-4" /> Nuevo Cliente</Button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 uppercase font-medium">
+            <tr>
+              <th className="px-4 py-3">Código SAP</th>
+              <th className="px-4 py-3 w-1/3">Nombre / Razón Social</th>
+              <th className="px-4 py-3">Canal</th>
+              <th className="px-4 py-3">Of. Venta</th>
+              <th className="px-4 py-3 text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+            {loading ? (
+                <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500 animate-pulse">Cargando directorio...</td></tr>
+            ) : (
+                paginatedClientes.map(c => (
+                <tr key={c.id} className={cn("hover:bg-gray-50 dark:hover:bg-slate-800/50", !c.activo && "opacity-60 bg-gray-50 dark:bg-slate-900/20")}>
+                    <td className="px-4 py-3 font-mono font-bold text-brand-700 dark:text-brand-400">
+                        {c.codigo_destinatario}
+                    </td>
+                    <td className="px-4 py-3">
+                        <span className={cn("font-bold block", c.nombre_destinatario ? "text-gray-900 dark:text-white" : "text-gray-400 italic")}>
+                            {c.nombre_destinatario || 'Sin Nombre'}
+                        </span>
+                    </td>
+                    <td className="px-4 py-3">
+                        {c.canal && (
+                            <span className="bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300">
+                                {c.canal}
+                            </span>
+                        )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-mono text-xs">
+                        {c.oficina_venta}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                    <button onClick={() => openEdit(c)} className="p-1.5 rounded text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors mr-1">
+                        <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => toggleStatus(c.id, c.activo)} className="p-1.5 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-red-600 transition-colors">
+                        <Power className="w-4 h-4" />
+                    </button>
+                    </td>
+                </tr>
+                ))
+            )}
+            {!loading && paginatedClientes.length === 0 && (
+                <tr>
+                    <td colSpan="5" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        No se encontraron clientes que coincidan con la búsqueda.
+                    </td>
+                </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between py-3">
+          <p className="text-sm text-gray-700 dark:text-gray-400 hidden sm:block">
+            Mostrando <span className="font-medium">{startIndex + 1}</span> a <span className="font-medium">{Math.min(startIndex + ITEMS_PER_PAGE, filteredClientes.length)}</span> de <span className="font-medium">{filteredClientes.length}</span> resultados
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft className="w-4 h-4" /></Button>
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight className="w-4 h-4" /></Button>
+          </div>
+        </div>
+      )}
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? "Editar Cliente" : "Nuevo Cliente"}>
+        <div className="space-y-4 pt-4">
+          
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-1">
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Cód. Destinatario</label>
+              <Input placeholder="Ej. 301" value={formData.codigo_destinatario} onChange={e => setFormData({...formData, codigo_destinatario: e.target.value.trim()})} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nombre Destinatario</label>
+              <Input placeholder="Razón Social..." value={formData.nombre_destinatario} onChange={e => setFormData({...formData, nombre_destinatario: e.target.value})} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Canal</label>
+              <select 
+                className="w-full h-10 rounded-md border border-gray-300 dark:border-slate-700 px-3 bg-white dark:bg-slate-900 dark:text-white text-sm"
+                value={formData.canal}
+                onChange={e => setFormData({...formData, canal: e.target.value})}
+              >
+                <option value="">Seleccionar...</option>
+                <option value="Professional">Professional</option>
+                <option value="Moderno">Moderno</option>
+                <option value="Masivo">Masivo</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Personal">Personal</option>
+                <option value="Exportacion">Exportacion</option>
+                <option value="B2B">B2B</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Oficina de Venta</label>
+              <Input placeholder="Ej. 1304" value={formData.oficina_venta} onChange={e => setFormData({...formData, oficina_venta: e.target.value})} />
+            </div>
+          </div>
+
+          <hr className="border-gray-100 dark:border-slate-700" />
+          
+          <div>
+              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-3">Datos del Solicitante (Opcional)</p>
+              <p className="text-xs text-gray-400 mb-3">Si se deja en blanco, el sistema copiará automáticamente los datos del Destinatario ingresados arriba.</p>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-1">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Cód. Solicitante</label>
+                    <Input placeholder="Cód..." value={formData.codigo_solicitante} onChange={e => setFormData({...formData, codigo_solicitante: e.target.value.trim()})} />
+                </div>
+                <div className="col-span-2">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Solicitante</label>
+                    <Input placeholder="Nombre..." value={formData.nombre_solicitante} onChange={e => setFormData({...formData, nombre_solicitante: e.target.value})} />
+                </div>
+              </div>
+          </div>
+
+          {editingItem && (
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-900/40 rounded-lg border dark:border-slate-700 mt-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Estado en Base de Datos</span>
+                <button type="button" onClick={() => setFormData({...formData, activo: !formData.activo})} className={cn("px-3 py-1 rounded-full text-xs font-bold transition-colors", formData.activo ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400")}>
+                    {formData.activo ? "ACTIVO" : "INACTIVO"}
+                </button>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100 dark:border-slate-700">
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave}>{editingItem ? "Guardar Cambios" : "Crear Cliente"}</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -962,13 +1239,11 @@ function AdvancedMasterManager() {
 
   useEffect(() => { loadItems(); }, [category]);
   const loadItems = async () => {
-    // SOLUCIÓN AL ERROR 400: Cambiado "category" por "categoria" según esquema SQL original
     const { data } = await supabase.from('maestros_opciones').select('*').eq('categoria', category).order('orden', { ascending: true });
     setItems(data || []);
   };
   const handleSave = async () => {
     if (!formData.etiqueta) return;
-    // SOLUCIÓN AL ERROR 400: Guardar usando "categoria"
     const { error } = await supabase.from('maestros_opciones').insert([{ categoria: category, etiqueta: formData.etiqueta, valor: formData.etiqueta, orden: formData.orden, activo: true }]);
     if (error) toast.error("Error al guardar"); else { toast.success("Agregado"); setFormData({ etiqueta: '', orden: 0 }); loadItems(); }
   };
