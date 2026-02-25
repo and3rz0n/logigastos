@@ -21,31 +21,31 @@ export const ProtectedLayout = () => {
       {/* Contenido Principal */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
-        {/* --- MOBILE HEADER (Corregido) --- */}
-        <div className="md:hidden flex items-center bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-4 py-3 gap-3 shadow-sm">
+        {/* --- MOBILE HEADER (Optimizado) --- */}
+        <div className="md:hidden flex items-center bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-4 py-3 gap-3 shadow-sm shrink-0">
           
           {/* 1. Botón Hamburguesa (Izquierda) */}
           <button 
             onClick={() => setIsSidebarOpen(true)} 
-            className="p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            className="p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors shrink-0"
           >
-            <Menu className="w-6 h-6" />
+            <Menu className="w-6 h-6 shrink-0" />
           </button>
 
           {/* 2. Logo e Identidad (Centro/Izquierda) */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-hidden">
             <img 
               src="/logo-softys.png" 
               alt="Softys" 
-              className="h-8 w-auto object-contain dark:hidden" 
+              className="h-8 w-auto object-contain dark:hidden shrink-0" 
             />
             <img 
               src="/logo-softys-white.png" 
               alt="Softys" 
-              className="h-8 w-auto object-contain hidden dark:block" 
+              className="h-8 w-auto object-contain hidden dark:block shrink-0" 
             />
-            <div className="h-4 w-px bg-gray-300 dark:bg-slate-600 mx-1"></div> {/* Separador vertical */}
-            <span className="font-bold text-brand-700 dark:text-brand-500 text-lg tracking-tight">
+            <div className="h-4 w-px bg-gray-300 dark:bg-slate-600 mx-1 shrink-0"></div>
+            <span className="font-bold text-brand-700 dark:text-brand-500 text-lg tracking-tight truncate">
               LogiGastos
             </span>
           </div>

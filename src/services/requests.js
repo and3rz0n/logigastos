@@ -195,26 +195,22 @@ export const saveVehicle = async (payload) => {
 // --- DESTINATARIOS ---
 export const getDestinatarioByCode = async (code) => {
   try {
-    // 1. Buscamos TODOS los registros que coincidan con el código
     const { data, error } = await supabase
       .from('destinatarios')
       .select('id, nombre_destinatario, canal, oficina_venta')
       .eq('codigo_destinatario', code);
       
     if (error) return null;
-    if (!data || data.length === 0) return null; // No existe el código
+    if (!data || data.length === 0) return null; 
 
-    // 2. Filtramos buscando el candidato ideal (el que sí tenga un nombre escrito)
     const validCandidate = data.find(item => 
       item.nombre_destinatario && item.nombre_destinatario.trim() !== ''
     );
 
-    // 3. Si encontramos uno bueno, lo devolvemos
     if (validCandidate) {
       return validCandidate;
     }
 
-    // 4. Plan B: Si todos están vacíos, tomamos el primero pero le inyectamos un texto de aviso
     const fallbackData = { ...data[0] }; 
     fallbackData.nombre_destinatario = 'Código Destinatario sin datos';
     
@@ -238,7 +234,7 @@ export const getApprovers = async () => {
   }
 };
 
-// --- ESCRITURA Y VALIDACIÓN (Siguen usando la tabla base) ---
+// --- ESCRITURA Y VALIDACIÓN ---
 export const checkDuplicateRequest = async (transportistaId, picking, tipoGasto, motivoGasto) => {
   try {
     const { data, error } = await supabase
@@ -265,11 +261,14 @@ export const createRequest = async (data) => {
     const motivoReal = data.motivo_gasto || data.sustento_texto || "";
 
     if (motivoReal) {
+      // Filtramos obligatoriamente por activo=true para evitar choques con el histórico
       const { data: motivoData } = await supabase
         .from('maestro_motivos')
         .select('id')
         .eq('nombre', motivoReal)
-        .single();
+        .eq('activo', true)
+        .limit(1)
+        .maybeSingle();
       
       if (motivoData) {
         const { data: sapData } = await supabase
@@ -321,19 +320,21 @@ export const createRequest = async (data) => {
   }
 };
 
-// --- LECTURA DE SOLICITUDES DESDE LA VISTA (Para Búsqueda Global y Paginación) ---
+// --- LECTURA DE SOLICITUDES DESDE LA VISTA ---
 
 export const getMyRequests = async (userProfile, page = 1, searchTerm = "", statusFilter = "all") => {
   try {
     const from = (page - 1) * 10;
     const to = from + 9;
-    const isAdminOrDev = userProfile.rol === 'admin' || userProfile.rol === 'developer';
+    
+    // MEJORA: El pagador ahora tiene acceso global igual que admin/dev
+    const isSupervisor = ['admin', 'developer', 'usuario_pagador'].includes(userProfile.rol);
 
     let query = supabase
       .from('view_solicitudes_operativas')
       .select('*', { count: 'exact' });
 
-    if (!isAdminOrDev) {
+    if (!isSupervisor) {
       query = query.eq('transportista_id', userProfile.id);
     }
 
@@ -343,7 +344,7 @@ export const getMyRequests = async (userProfile, page = 1, searchTerm = "", stat
 
     if (searchTerm) {
       let filter = `nro_transporte_sap.ilike.%${searchTerm}%,nombre_aprobador_asignado.ilike.%${searchTerm}%`;
-      if (isAdminOrDev) {
+      if (isSupervisor) {
         filter += `,nombre_transportista.ilike.%${searchTerm}%`;
       }
       query = query.or(filter);
@@ -446,25 +447,31 @@ export const getPaidHistory = async (page = 1, searchTerm = "", dateFrom = "", d
   }
 };
 
-// --- ACCIONES (Escritura en tabla base) ---
+// --- ACCIONES DE ESCRITURA ---
 
-export const updateRequestStatus = async (requestId, newStatus, currentUserId, rejectionReason = null) => {
+export const updateRequestStatus = async (requestId, newStatus, currentUserId, rejectionReason = null, asuntoCorreo = null) => {
   try {
     const updateData = { 
       estado: newStatus,
       updated_at: new Date().toISOString()
     };
+    
     if (newStatus === 'aprobado') {
       updateData.aprobador_real_id = currentUserId;
       updateData.validacion_analista = true;
       updateData.gasto_autorizado = true;
       updateData.resolutor_id = currentUserId;
+      if (asuntoCorreo) {
+        updateData.asunto_correo = asuntoCorreo;
+      }
     } else {
       updateData.resolutor_id = currentUserId;
       if (rejectionReason) updateData.motivo_rechazo = rejectionReason;
     }
+    
     const { error } = await supabase.from('solicitudes_gastos').update(updateData).eq('id', requestId);
     if (error) throw error;
+    
     return { success: true };
   } catch (error) {
     throw error;
@@ -488,6 +495,7 @@ export const processBatchPayments = async (requestIds, currentUserId) => {
   }
 };
 
+// --- HISTORIAL GENERAL (MASTER) ---
 export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm = "", filters = {}) => {
   try {
     const from = (page - 1) * pageSize;
@@ -503,18 +511,32 @@ export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm 
 
     if (filters.tipo_gasto && filters.tipo_gasto !== 'all') query = query.eq('tipo_gasto', filters.tipo_gasto);
     if (filters.motivo && filters.motivo !== 'all') query = query.eq('motivo', filters.motivo);
-    if (filters.estado && filters.estado !== 'all') query = query.eq('validacion_analista', filters.estado);
+    
+    // TRADUCCIÓN INTELIGENTE DE ESTADO: Mapea Aprobado/Rechazado a los valores booleanos/texto de la DB
+    if (filters.estado && filters.estado !== 'all') {
+      if (filters.estado === 'aprobado') {
+        query = query.or('validacion_analista.eq.VERDADERO,validacion_analista.eq.true');
+      } else if (filters.estado === 'rechazado') {
+        query = query.or('validacion_analista.eq.FALSO,validacion_analista.eq.false');
+      }
+    }
+    
     if (filters.posicion && filters.posicion !== 'all') query = query.eq('posicion', filters.posicion);
     if (filters.clase_de_condicion && filters.clase_de_condicion !== 'all') query = query.eq('clase_de_condicion', filters.clase_de_condicion);
     if (filters.tipo_de_cuenta && filters.tipo_de_cuenta !== 'all') query = query.eq('tipo_de_cuenta', filters.tipo_de_cuenta);
     
-    if (filters.fe_registro) {
+    // MEJORA: Rangos de Fecha de Registro
+    if (filters.fechaInicioReg && filters.fechaFinReg) {
       query = query
-        .gte('fe_registro', `${filters.fe_registro}T00:00:00-05:00`)
-        .lte('fe_registro', `${filters.fe_registro}T23:59:59-05:00`);
+        .gte('fe_registro', `${filters.fechaInicioReg}T00:00:00-05:00`)
+        .lte('fe_registro', `${filters.fechaFinReg}T23:59:59-05:00`);
     }
-    if (filters.fe_factura) {
-      query = query.eq('fe_factura', filters.fe_factura);
+
+    // MEJORA: Rangos de Fecha de Factura
+    if (filters.fechaInicioFac && filters.fechaFinFac) {
+      query = query
+        .gte('fe_factura', filters.fechaInicioFac)
+        .lte('fe_factura', filters.fechaFinFac);
     }
 
     const { data, error, count } = await query
@@ -543,18 +565,29 @@ export const getAllGeneralHistoryDataFiltered = async (searchTerm = "", filters 
 
     if (filters.tipo_gasto && filters.tipo_gasto !== 'all') query = query.eq('tipo_gasto', filters.tipo_gasto);
     if (filters.motivo && filters.motivo !== 'all') query = query.eq('motivo', filters.motivo);
-    if (filters.estado && filters.estado !== 'all') query = query.eq('validacion_analista', filters.estado);
+    
+    if (filters.estado && filters.estado !== 'all') {
+      if (filters.estado === 'aprobado') {
+        query = query.or('validacion_analista.eq.VERDADERO,validacion_analista.eq.true');
+      } else if (filters.estado === 'rechazado') {
+        query = query.or('validacion_analista.eq.FALSO,validacion_analista.eq.false');
+      }
+    }
+
     if (filters.posicion && filters.posicion !== 'all') query = query.eq('posicion', filters.posicion);
     if (filters.clase_de_condicion && filters.clase_de_condicion !== 'all') query = query.eq('clase_de_condicion', filters.clase_de_condicion);
     if (filters.tipo_de_cuenta && filters.tipo_de_cuenta !== 'all') query = query.eq('tipo_de_cuenta', filters.tipo_de_cuenta);
     
-    if (filters.fe_registro) {
+    if (filters.fechaInicioReg && filters.fechaFinReg) {
       query = query
-        .gte('fe_registro', `${filters.fe_registro}T00:00:00-05:00`)
-        .lte('fe_registro', `${filters.fe_registro}T23:59:59-05:00`);
+        .gte('fe_registro', `${filters.fechaInicioReg}T00:00:00-05:00`)
+        .lte('fe_registro', `${filters.fechaFinReg}T23:59:59-05:00`);
     }
-    if (filters.fe_factura) {
-      query = query.eq('fe_factura', filters.fe_factura);
+
+    if (filters.fechaInicioFac && filters.fechaFinFac) {
+      query = query
+        .gte('fe_factura', filters.fechaInicioFac)
+        .lte('fe_factura', filters.fechaFinFac);
     }
 
     const { data, error } = await query.order('fe_registro', { ascending: false });
@@ -567,22 +600,25 @@ export const getAllGeneralHistoryDataFiltered = async (searchTerm = "", filters 
   }
 };
 
+// MEJORA: Extracción automática de filtros limpios en JavaScript para evitar el Error 400
 export const getGeneralHistoryUniqueFilters = async () => {
   try {
-    const [p, c, a] = await Promise.all([
-      supabase.from('view_historial_general').select('posicion').not('posicion', 'is', null).neq('posicion', ''),
-      supabase.from('view_historial_general').select('clase_de_condicion').not('clase_de_condicion', 'is', null).neq('clase_de_condicion', ''),
-      supabase.from('view_historial_general').select('tipo_de_cuenta').not('tipo_de_cuenta', 'is', null).neq('tipo_de_cuenta', '')
+    const [p, c, a, t] = await Promise.all([
+      supabase.from('view_historial_general').select('posicion').not('posicion', 'is', null),
+      supabase.from('view_historial_general').select('clase_de_condicion').not('clase_de_condicion', 'is', null),
+      supabase.from('view_historial_general').select('tipo_de_cuenta').not('tipo_de_cuenta', 'is', null),
+      supabase.from('view_historial_general').select('tipo_gasto').not('tipo_gasto', 'is', null)
     ]);
 
     return {
-      posiciones: [...new Set((p.data || []).map(item => item.posicion))].sort(),
-      condiciones: [...new Set((c.data || []).map(item => item.clase_de_condicion))].sort(),
-      cuentas: [...new Set((a.data || []).map(item => item.tipo_de_cuenta))].sort()
+      posiciones: [...new Set((p.data || []).map(item => item.posicion).filter(v => v && v.trim() !== ''))].sort(),
+      condiciones: [...new Set((c.data || []).map(item => item.clase_de_condicion).filter(v => v && v.trim() !== ''))].sort(),
+      cuentas: [...new Set((a.data || []).map(item => item.tipo_de_cuenta).filter(v => v && v.trim() !== ''))].sort(),
+      tiposGasto: [...new Set((t.data || []).map(item => item.tipo_gasto).filter(v => v && v.trim() !== ''))].sort()
     };
   } catch (error) {
     console.error("Error cargando filtros únicos SAP:", error);
-    return { posiciones: [], condiciones: [], cuentas: [] };
+    return { posiciones: [], condiciones: [], cuentas: [], tiposGasto: [] };
   }
 };
 
@@ -655,8 +691,6 @@ export const getDataExplorerRequests = async () => {
 export const getAllDestinatarios = async () => {
   try {
     let query = supabase.from('destinatarios').select('*');
-    
-    // Uso de la función maestra para ignorar el límite de 1000 registros
     const allData = await fetchAllPages(query);
     return allData;
   } catch (error) {

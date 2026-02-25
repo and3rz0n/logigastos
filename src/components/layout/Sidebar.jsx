@@ -18,13 +18,12 @@ import {
   BarChart,
   Table,
   Sun,
-  Moon,
-  Monitor
+  Moon
 } from 'lucide-react';
 
 export function Sidebar({ isOpen, setIsOpen }) {
   const { profile, signOut } = useAuth();
-  const { theme, cycleTheme } = useTheme();
+  const { theme, setTheme } = useTheme(); // Usamos setTheme para el control directo
   const location = useLocation();
 
   // Mantener el submenú abierto si estamos en alguna ruta de dashboard
@@ -39,7 +38,6 @@ export function Sidebar({ isOpen, setIsOpen }) {
   // Lógica de Permisos
   const userRole = profile?.rol || '';
   
-  // Perfiles base
   const isTransportista = userRole === 'operador_logistico';
   const isAprobador = userRole === 'aprobador';
   const isPagador = userRole === 'usuario_pagador';
@@ -51,14 +49,18 @@ export function Sidebar({ isOpen, setIsOpen }) {
   const canSeeGlobalDashboards = isPagador || isVisualizador || isAdminOrDev;
   
   // Reglas de operación
-  const canSeeMisGastos = isTransportista || isAdminOrDev;
+  const canSeeMisGastos = isTransportista || isAdminOrDev || isPagador; // Pagador ahora puede entrar
   const canApprove = isAprobador || isAdminOrDev;
   const canManagePayments = isPagador || isAdminOrDev;
 
-  // Acceso a Reportes Críticos y Configuración
-  const canSeeHistory = isAdminOrDev;
+  // Acceso a Reportes Críticos (Historial General)
+  const canSeeHistory = isAdminOrDev || isPagador; // NUEVO: Pagador habilitado
 
-  // Estructura de Navegación por Bloques
+  // Función simplificada para alternar solo entre Light y Dark
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
   const menuBlocks = [
     {
       title: "Análisis",
@@ -81,7 +83,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
     {
       title: "Operación",
       items: [
-        { to: '/mis-solicitudes', label: isAdminOrDev ? 'Gastos' : 'Mis Gastos', icon: Truck, show: canSeeMisGastos },
+        { to: '/mis-solicitudes', label: (isAdminOrDev || isPagador) ? 'Gastos' : 'Mis Gastos', icon: Truck, show: canSeeMisGastos },
         { to: '/aprobar', label: 'Aprobaciones', icon: CheckSquare, show: canApprove },
         { to: '/pagos', label: 'Centro de Pagos', icon: DollarSign, show: canManagePayments },
       ]
@@ -97,7 +99,6 @@ export function Sidebar({ isOpen, setIsOpen }) {
 
   return (
     <>
-      {/* Overlay Oscuro para Móvil */}
       {isOpen && (
         <div 
           className="fixed inset-0 z-20 bg-black/50 md:hidden transition-opacity"
@@ -105,37 +106,23 @@ export function Sidebar({ isOpen, setIsOpen }) {
         />
       )}
 
-      {/* Barra Lateral */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 flex flex-col h-full",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         
-        {/* Cabecera Sidebar (Logo Softys) */}
         <div className="flex items-center justify-between h-16 px-6 border-b border-gray-100 dark:border-slate-700/50 shrink-0">
           <div className="flex items-center gap-2">
-            <img 
-              src="/logo-softys.png" 
-              alt="Softys" 
-              className="h-8 w-auto object-contain dark:hidden" 
-            />
-            <img 
-              src="/logo-softys-white.png" 
-              alt="Softys" 
-              className="h-8 w-auto object-contain hidden dark:block" 
-            />
+            <img src="/logo-softys.png" alt="Softys" className="h-8 w-auto object-contain dark:hidden" />
+            <img src="/logo-softys-white.png" alt="Softys" className="h-8 w-auto object-contain hidden dark:block" />
             <div className="h-4 w-px bg-gray-300 dark:bg-slate-600 mx-1"></div>
             <span className="font-bold text-xl text-brand-900 dark:text-white tracking-tight">LogiGastos</span>
           </div>
-          <button 
-            onClick={() => setIsOpen(false)} 
-            className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors"
-          >
+          <button onClick={() => setIsOpen(false)} className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        {/* Perfil Resumido */}
         <div className="p-6 border-b border-gray-100 dark:border-slate-700/50 shrink-0">
           <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
             {profile?.nombre_completo || 'Cargando...'}
@@ -145,7 +132,6 @@ export function Sidebar({ isOpen, setIsOpen }) {
           </p>
         </div>
 
-        {/* Navegación por Bloques */}
         <nav className="p-4 space-y-6 overflow-y-auto flex-1">
           {menuBlocks.map((block, index) => {
             const visibleItems = block.items.filter(item => item.show);
@@ -157,7 +143,6 @@ export function Sidebar({ isOpen, setIsOpen }) {
                   {block.title}
                 </p>
                 {visibleItems.map((item) => {
-                  
                   if (item.isSubmenu) {
                     const visibleSubItems = item.subItems.filter(sub => sub.show);
                     if (visibleSubItems.length === 0) return null;
@@ -227,40 +212,33 @@ export function Sidebar({ isOpen, setIsOpen }) {
           })}
         </nav>
 
-        {/* Footer: Apariencia, Cerrar Sesión y Copyright */}
         <div className="border-t border-gray-100 dark:border-slate-700/50 bg-white dark:bg-slate-800 shrink-0">
           <div className="p-4 space-y-2">
-            
-            {/* Botón Toggle Modo Oscuro */}
             <button
-              onClick={cycleTheme}
+              onClick={toggleTheme}
               className="flex items-center justify-between px-4 py-3 w-full text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors outline-none"
             >
               <div className="flex items-center gap-3">
-                {theme === 'light' && <Sun className="w-5 h-5 shrink-0 text-brand-500" />}
-                {theme === 'dark' && <Moon className="w-5 h-5 shrink-0 text-brand-400" />}
-                {theme === 'system' && <Monitor className="w-5 h-5 shrink-0 text-gray-500" />}
-                <span>Apariencia: <span className="capitalize">{theme}</span></span>
+                {theme === 'light' ? (
+                  <Moon className="w-5 h-5 shrink-0 text-brand-500" />
+                ) : (
+                  <Sun className="w-5 h-5 shrink-0 text-brand-400" />
+                )}
+                <span>Modo {theme === 'light' ? 'Oscuro' : 'Claro'}</span>
               </div>
             </button>
 
-            {/* Botón Cerrar Sesión */}
-            <button 
-              onClick={signOut}
-              className="flex items-center gap-3 px-4 py-3 w-full text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-xl transition-colors group outline-none"
-            >
+            <button onClick={signOut} className="flex items-center gap-3 px-4 py-3 w-full text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-xl transition-colors group outline-none">
               <LogOut className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
               Cerrar Sesión
             </button>
           </div>
-          
           <footer className="app-footer px-4 pb-4 pt-1 text-center">
             <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-tight">
               &copy; Copyright {new Date().getFullYear()} Todos los derechos reservados a Anderson Cabanillas.
             </p>
           </footer>
         </div>
-
       </aside>
     </>
   );

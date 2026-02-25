@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { 
   CheckCircle, XCircle, Clock, MapPin, AlertTriangle, 
   Truck, Info, Tag, FileText, Store, User, Search,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Mail
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getPendingApprovals, updateRequestStatus } from '../services/requests';
@@ -22,10 +22,16 @@ export default function Approvals() {
   const [totalCount, setTotalCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Estados comunes para modales
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
+
   // Estados para el rechazo
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // Estados para la aprobación (NUEVO)
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [approvalSubject, setApprovalSubject] = useState('');
 
   // Carga de datos reactiva a cambios de página o búsqueda global
   useEffect(() => {
@@ -58,7 +64,9 @@ export default function Approvals() {
 
   const handleAction = async (id, action) => {
     if (action === 'approve') {
-      await processUpdate(id, 'aprobado');
+      setSelectedRequestId(id);
+      setApprovalSubject(''); // Limpiamos el campo
+      setIsApproveModalOpen(true); // Abrimos el nuevo modal
     } else {
       setSelectedRequestId(id);
       setRejectionReason(''); 
@@ -69,10 +77,14 @@ export default function Approvals() {
   const processUpdate = async (id, status) => {
     try {
       const reasonToSend = status === 'rechazado' ? rejectionReason : null;
-      await updateRequestStatus(id, status, user.id, reasonToSend);
+      const subjectToSend = status === 'aprobado' ? approvalSubject : null;
+
+      // Enviamos el nuevo parámetro subjectToSend a la función
+      await updateRequestStatus(id, status, user.id, reasonToSend, subjectToSend);
       
       toast.success(status === 'aprobado' ? 'Solicitud Aprobada ✅' : 'Solicitud Rechazada ❌');
       setIsRejectModalOpen(false);
+      setIsApproveModalOpen(false);
       
       // Ajuste de página si el registro era el último del bloque para evitar vista vacía
       if (requests.length === 1 && currentPage > 1) {
@@ -177,7 +189,9 @@ export default function Approvals() {
         </div>
       )}
 
-      {/* Modal de Rechazo */}
+      {/* ------------------------------------------- */}
+      {/* MODAL 1: RECHAZO */}
+      {/* ------------------------------------------- */}
       <Modal 
         isOpen={isRejectModalOpen}
         onClose={() => setIsRejectModalOpen(false)}
@@ -196,7 +210,7 @@ export default function Approvals() {
                     Motivo del rechazo <span className="text-red-500">*</span>
                 </label>
                 <textarea 
-                    className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none resize-none transition-colors"
+                    className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white rounded-lg p-3 text-base focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none resize-none transition-colors"
                     rows="3"
                     placeholder="Ej. La tarifa no coincide con el contrato..."
                     value={rejectionReason}
@@ -212,6 +226,47 @@ export default function Approvals() {
                     disabled={rejectionReason.trim().length < 5}
                 >
                     Confirmar Rechazo
+                </Button>
+            </div>
+        </div>
+      </Modal>
+
+      {/* ------------------------------------------- */}
+      {/* MODAL 2: APROBACIÓN CON ASUNTO DE CORREO */}
+      {/* ------------------------------------------- */}
+      <Modal 
+        isOpen={isApproveModalOpen}
+        onClose={() => setIsApproveModalOpen(false)}
+        title="Aprobar Solicitud"
+      >
+        <div className="space-y-4">
+            <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg flex items-start gap-3 text-sm text-green-800 dark:text-green-300 border border-green-100 dark:border-green-900/50">
+                <Mail className="w-5 h-5 text-green-600 dark:text-green-500 shrink-0 mt-0.5" />
+                <p>
+                    Para auditar la aprobación de este gasto, ingresa el <strong>Asunto del Correo</strong> mediante el cual se autorizó.
+                </p>
+            </div>
+            
+            <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    Asunto del Correo <span className="text-red-500">*</span>
+                </label>
+                <Input 
+                    placeholder="Ej. RV: Aprobación Falso Flete Febrero..."
+                    value={approvalSubject}
+                    onChange={(e) => setApprovalSubject(e.target.value)}
+                    className="text-base"
+                />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setIsApproveModalOpen(false)}>Cancelar</Button>
+                <Button 
+                    onClick={() => processUpdate(selectedRequestId, 'aprobado')}
+                    className="bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/20"
+                    disabled={approvalSubject.trim().length < 5}
+                >
+                    Aprobar Gasto
                 </Button>
             </div>
         </div>
@@ -307,34 +362,46 @@ function ApprovalCard({ req, onAction }) {
            </div>
         </div>
 
-        <div className="md:col-span-4 space-y-4 border-l border-gray-100 dark:border-slate-700 pl-0 md:pl-6">
-           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Datos Operativos</p>
-           <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                 <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><MapPin className="w-4 h-4" /> Zona</span>
-                 <span className="font-medium text-gray-900 dark:text-white">{req.zona}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                 <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><Truck className="w-4 h-4" /> Capacidad</span>
-                 <span className="font-medium text-gray-900 dark:text-white">{capacidad} m³</span>
-              </div>
-              <div className="flex items-center justify-between">
-                 <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><Tag className="w-4 h-4" /> Área</span>
-                 <span className="font-bold text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 px-2 py-0.5 rounded border border-brand-100 dark:border-brand-800/50">
-                    {req.nombre_area || 'General'}
-                 </span>
-              </div>
-              <div className="flex items-center justify-between">
-                 <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><FileText className="w-4 h-4" /> Picking</span>
-                 <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{req.nro_transporte_sap || '---'}</span>
-              </div>
+        <div className="md:col-span-4 space-y-4 border-l border-gray-100 dark:border-slate-700 pl-0 md:pl-6 flex flex-col justify-between">
+           <div>
+               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Datos Operativos</p>
+               <div className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                     <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><MapPin className="w-4 h-4" /> Zona</span>
+                     <span className="font-medium text-gray-900 dark:text-white">{req.zona}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><Truck className="w-4 h-4" /> Capacidad</span>
+                     <span className="font-medium text-gray-900 dark:text-white">{capacidad} m³</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><Tag className="w-4 h-4" /> Área</span>
+                     <span className="font-bold text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 px-2 py-0.5 rounded border border-brand-100 dark:border-brand-800/50">
+                        {req.nombre_area || 'General'}
+                     </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><FileText className="w-4 h-4" /> Picking</span>
+                     <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{req.nro_transporte_sap || '---'}</span>
+                  </div>
+               </div>
+           </div>
+           
+           {/* NUEVO: Fila del Motivo del Gasto */}
+           <div className="flex items-start justify-between gap-2 mt-2 pt-3 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/30 -mx-4 px-4 sm:mx-0 sm:px-2 rounded-lg">
+               <span className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase flex items-center gap-1 shrink-0 mt-0.5">
+                   <Info className="w-3.5 h-3.5" /> Motivo:
+               </span>
+               <span className="font-medium text-gray-900 dark:text-white text-sm text-right leading-tight italic">
+                   {req.motivo_gasto || 'No especificado'}
+               </span>
            </div>
         </div>
 
         <div className="md:col-span-3 flex flex-col justify-center gap-3 border-l border-gray-100 dark:border-slate-700 pl-0 md:pl-6">
           <Button 
             onClick={() => onAction(req.id, 'approve')}
-            className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md h-12 text-sm font-bold"
+            className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md shadow-green-600/20 h-12 text-sm font-bold"
           >
             <CheckCircle className="w-4 h-4 mr-2" /> APROBAR
           </Button>

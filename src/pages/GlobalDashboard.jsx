@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getGlobalDashboardStats } from '../services/dashboard';
+import { getGlobalDashboardStats, getAvailableYears } from '../services/dashboard';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList 
 } from 'recharts';
-import { DollarSign, FileText, TrendingUp, Calendar, LayoutDashboard } from 'lucide-react';
+import { DollarSign, FileText, TrendingUp, Calendar, LayoutDashboard, Receipt } from 'lucide-react';
 import { Input } from '../components/ui/Input';
 import { cn } from '../utils/cn';
 
@@ -13,24 +13,45 @@ export default function GlobalDashboard() {
   const { profile } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [availableYears, setAvailableYears] = useState([]);
 
   // --- ESTADOS DE FILTROS ---
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
+  
+  // Filtros Duales de Fecha
+  const [fechaInicioReg, setFechaInicioReg] = useState('');
+  const [fechaFinReg, setFechaFinReg] = useState('');
+  const [fechaInicioFac, setFechaInicioFac] = useState('');
+  const [fechaFinFac, setFechaFinFac] = useState('');
 
   // Colores para las barras del gráfico (Azules Softys)
   const COLORS = ['#003366', '#0ea5e9', '#94a3b8', '#0c4a6e'];
 
+  // Carga inicial de años disponibles en la base de datos
+  useEffect(() => {
+    const fetchYears = async () => {
+      const years = await getAvailableYears();
+      setAvailableYears(years);
+      if (!years.includes(year)) {
+        setYear(years[0] || new Date().getFullYear().toString());
+      }
+    };
+    fetchYears();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Carga de datos al cambiar cualquier filtro
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       const filters = {
-        year: parseInt(year),
-        month: parseInt(month),
-        fechaInicio,
-        fechaFin
+        year: year, // Enviamos como string, el servicio lo parsea o maneja 'all'
+        month: month,
+        fechaInicioReg,
+        fechaFinReg,
+        fechaInicioFac,
+        fechaFinFac
       };
       // Enviamos los filtros a la base de datos
       const data = await getGlobalDashboardStats(filters);
@@ -38,7 +59,7 @@ export default function GlobalDashboard() {
       setLoading(false);
     };
     loadData();
-  }, [year, month, fechaInicio, fechaFin]); // Se recarga al cambiar cualquier filtro
+  }, [year, month, fechaInicioReg, fechaFinReg, fechaInicioFac, fechaFinFac]);
 
   // --- ENRUTADOR INTELIGENTE POR ROL ---
   const userRole = profile?.rol || '';
@@ -48,6 +69,8 @@ export default function GlobalDashboard() {
   if (profile && !canSeeGlobalDashboards) {
     return <Navigate to="/dashboard/personal" replace />;
   }
+
+  const hasDateFilters = fechaInicioReg || fechaFinReg || fechaInicioFac || fechaFinFac;
 
   return (
     <div className="space-y-6 pb-20">
@@ -59,84 +82,122 @@ export default function GlobalDashboard() {
             <LayoutDashboard className="w-6 h-6 text-brand-600" /> Dashboard Global
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Hola, {profile?.nombre_completo?.split(' ')[0]} 👋. Aquí tienes el resumen de la operación logística.
+            Hola, {profile?.nombre_completo?.split(' ')[0]} 👋. Resumen financiero de gastos <span className="font-bold text-brand-700 dark:text-brand-400">Aprobados y Pagados</span>.
           </p>
         </div>
       </div>
 
-      {/* 2. Barra de Filtros Inteligente */}
-      <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-        <div>
-          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 flex items-center gap-1">
-            <Calendar className="w-3 h-3" /> Año
-          </label>
-          <select 
-            className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm font-medium dark:text-white outline-none"
-            value={year} onChange={(e) => setYear(e.target.value)}
-          >
-            {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
+      {/* 2. Barra de Filtros Inteligente (Regla de la Cápsula) */}
+      <div className="space-y-4">
+        
+        {/* CÁPSULA 1: OPERACIÓN (Basado en Fecha de Registro) */}
+        <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col lg:flex-row gap-4">
+          
+          <div className="flex gap-4 w-full lg:w-auto shrink-0">
+            <div className="flex-1 lg:w-32">
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Año
+              </label>
+              {/* text-base OBLIGATORIO para evitar zoom en iOS */}
+              <select 
+                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-3 text-base font-medium dark:text-white outline-none cursor-pointer"
+                value={year} onChange={(e) => setYear(e.target.value)}
+              >
+                <option value="all">Todos</option>
+                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
 
-        <div>
-          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Mes</label>
-          <select 
-            className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm font-medium dark:text-white outline-none"
-            value={month} onChange={(e) => setMonth(e.target.value)}
-          >
-            {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((m, i) => (
-              <option key={m} value={i + 1}>{m}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex gap-2 lg:col-span-2">
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-brand-600 dark:text-brand-400 uppercase mb-1">F. Inicio (Opcional)</label>
-            <Input type="date" className="h-11 dark:text-white" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+            <div className="flex-1 lg:w-40">
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Mes Registro</label>
+              <select 
+                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-3 text-base font-medium dark:text-white outline-none cursor-pointer"
+                value={month} onChange={(e) => setMonth(e.target.value)}
+              >
+                <option value="all">Todos</option>
+                {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((m, i) => (
+                  <option key={m} value={i + 1}>{m}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-brand-600 dark:text-brand-400 uppercase mb-1">F. Fin (Opcional)</label>
-            <Input type="date" className="h-11 dark:text-white" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+
+          <div className="hidden lg:block w-px bg-gray-200 dark:bg-slate-700 my-1 shrink-0"></div>
+
+          <div className="flex-1 flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-brand-600 dark:text-brand-400 uppercase mb-1 flex items-center gap-1">
+                F. Registro (Inicio)
+              </label>
+              <Input type="date" className="h-11 dark:text-white text-base" value={fechaInicioReg} onChange={(e) => setFechaInicioReg(e.target.value)} />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-brand-600 dark:text-brand-400 uppercase mb-1 flex items-center gap-1">
+                F. Registro (Fin)
+              </label>
+              <Input type="date" className="h-11 dark:text-white text-base" value={fechaFinReg} onChange={(e) => setFechaFinReg(e.target.value)} />
+            </div>
           </div>
+
         </div>
 
-        {/* Botón de limpiar fechas */}
-        {(fechaInicio || fechaFin) && (
-          <button 
-            onClick={() => { setFechaInicio(''); setFechaFin(''); }}
-            className="h-11 px-4 text-sm font-bold text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-          >
-            Limpiar
-          </button>
-        )}
+        {/* CÁPSULA 2: CONTABILIDAD (Basado en Fecha de Factura) */}
+        <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col sm:flex-row gap-4 items-end">
+          
+          <div className="flex-1 flex flex-col sm:flex-row gap-4 w-full">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1 flex items-center gap-1">
+                <Receipt className="w-3 h-3" /> F. Factura (Inicio)
+              </label>
+              <Input type="date" className="h-11 dark:text-white text-base" value={fechaInicioFac} onChange={(e) => setFechaInicioFac(e.target.value)} />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1 flex items-center gap-1">
+                <Receipt className="w-3 h-3" /> F. Factura (Fin)
+              </label>
+              <Input type="date" className="h-11 dark:text-white text-base" value={fechaFinFac} onChange={(e) => setFechaFinFac(e.target.value)} />
+            </div>
+          </div>
+          
+          {/* Botón de limpiar fechas */}
+          {hasDateFilters && (
+            <button 
+              onClick={() => { setFechaInicioReg(''); setFechaFinReg(''); setFechaInicioFac(''); setFechaFinFac(''); }}
+              className="h-11 px-6 w-full sm:w-auto text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-xl transition-colors shrink-0"
+            >
+              Limpiar Fechas
+            </button>
+          )}
+
+        </div>
+
       </div>
 
       {loading || !stats ? (
-        <div className="p-8 text-center text-gray-500 dark:text-gray-400 animate-pulse font-medium">Cargando métricas del periodo...</div>
+        <div className="p-8 text-center text-gray-500 dark:text-gray-400 animate-pulse font-medium">Calculando métricas aprobadas...</div>
       ) : (
         <>
           {/* 3. Tarjetas de KPIs (Grid) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard 
-              title="Gasto Total" 
+              title="Gasto Total (Aprobado)" 
               value={`S/ ${stats.kpis.totalGasto.toLocaleString('es-PE', { minimumFractionDigits: 2 })}`}
               icon={DollarSign}
-              trend="Del periodo seleccionado"
+              trend="Monto validado en el periodo"
               color="blue"
             />
             <StatCard 
-              title="Solicitudes" 
+              title="Solicitudes Efectivas" 
               value={stats.kpis.totalSolicitudes}
               icon={FileText}
-              trend="En el periodo"
+              trend="No incluye rechazadas"
               color="emerald"
             />
             <StatCard 
               title="Ticket Promedio" 
               value={`S/ ${stats.kpis.promedio.toLocaleString('es-PE', { maximumFractionDigits: 0 })}`}
               icon={TrendingUp}
-              trend="Por solicitud"
+              trend="Por solicitud aprobada"
               color="indigo"
             />
           </div>
@@ -145,8 +206,8 @@ export default function GlobalDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* Gráfico de Barras */}
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Distribución de Gastos</h3>
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Distribución de Gastos Reales</h3>
               <div className="h-[300px] w-full">
                 {stats.graficos.gastosPorTipo.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -157,13 +218,13 @@ export default function GlobalDashboard() {
                       <Tooltip 
                         formatter={(value) => `S/ ${value.toLocaleString()}`}
                         contentStyle={{ 
-                          borderRadius: '8px', 
+                          borderRadius: '12px', 
                           border: 'none', 
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
                           backgroundColor: '#1e293b',
                           color: '#f8fafc'
                         }}
-                        itemStyle={{ color: '#f8fafc' }}
+                        itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
                       />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
                         <LabelList 
@@ -181,38 +242,41 @@ export default function GlobalDashboard() {
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-600 text-sm">
-                    No hay datos para este periodo.
+                  <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-600 text-sm font-medium">
+                    No hay gastos aprobados en este periodo.
                   </div>
                 )}
               </div>
             </div>
 
             {/* Lista de Recientes */}
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Últimos Movimientos</h3>
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Últimos Movimientos Aprobados</h3>
               <div className="space-y-4">
                 {stats.recientes.length > 0 ? stats.recientes.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-600">
+                  <div key={item.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-600">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 flex items-center justify-center">
+                      <div className="h-10 w-10 rounded-full bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 flex items-center justify-center shrink-0">
                         <Calendar className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                           {item.tipo_gasto}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {item.fecha_factura ? new Date(item.fecha_factura + "T00:00:00").toLocaleDateString('es-PE') : 'Sin fecha'} • <span className="capitalize">{item.estado}</span>
+                        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mt-0.5">
+                          Fac: {item.fecha_factura ? new Date(item.fecha_factura + "T00:00:00").toLocaleDateString('es-PE') : 'Sin fecha'} • <span className={cn(
+                            "capitalize font-bold",
+                            item.estado === 'pagado' ? "text-blue-600 dark:text-blue-400" : "text-green-600 dark:text-green-400"
+                          )}>{item.estado}</span>
                         </p>
                       </div>
                     </div>
-                    <span className="font-bold text-gray-900 dark:text-white">
+                    <span className="font-black text-gray-900 dark:text-white">
                       S/ {item.total_gasto?.toLocaleString('es-PE', {minimumFractionDigits: 2})}
                     </span>
                   </div>
                 )) : (
-                  <div className="text-center py-6 text-gray-400 dark:text-gray-600 text-sm">
+                  <div className="text-center py-10 text-gray-400 dark:text-gray-600 text-sm font-medium">
                     No hay movimientos recientes en este periodo.
                   </div>
                 )}
@@ -234,19 +298,19 @@ function StatCard({ title, value, icon: Icon, trend, color }) {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-shadow">
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{value}</h3>
+          <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{title}</p>
+          <h3 className="text-2xl font-black text-gray-900 dark:text-white mt-1">{value}</h3>
         </div>
-        <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", colors[color])}>
+        <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center shrink-0", colors[color])}>
           <Icon className="h-6 w-6" />
         </div>
       </div>
-      <div className="mt-4 flex items-center text-sm">
-        <span className="text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
-          <TrendingUp className="h-3 w-3" />
+      <div className="mt-4 flex items-center text-xs">
+        <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1">
+          <TrendingUp className="h-3.5 w-3.5" />
           {trend}
         </span>
       </div>

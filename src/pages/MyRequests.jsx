@@ -37,7 +37,9 @@ export default function MyRequests() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const isAdminOrDev = profile?.rol === 'admin' || profile?.rol === 'developer';
+  // Definición de roles de supervisión (Admin, Dev y ahora Pagador)
+  const isSupervisor = ['admin', 'developer', 'usuario_pagador'].includes(profile?.rol);
+  const isTransportista = profile?.rol === 'operador_logistico';
 
   // Carga de datos reactiva a cambios de página, búsqueda o filtro de estado
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function MyRequests() {
 
   const loadRequests = async () => {
     setLoading(true);
-    // El servicio ahora consulta la Vista con parámetros de paginación y búsqueda global
+    // El servicio actualizado ya entrega datos globales si detecta rol de supervisor
     const { data, totalCount: total } = await getMyRequests(
       profile, 
       currentPage, 
@@ -64,26 +66,27 @@ export default function MyRequests() {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Cabecera Principal */}
+      {/* Cabecera Principal - Cambia según el rol */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-sans">
-            {isAdminOrDev ? "Gastos" : "Mis Gastos"}
+            {isSupervisor ? "Gastos Globales" : "Mis Gastos"}
           </h1>
           <p className="text-gray-500 dark:text-gray-400">
-            {isAdminOrDev 
-              ? "Auditoría global de gastos adicionales y falsos fletes." 
-              : "Gestiona tus gastos adicionales y falsos fletes."}
+            {isSupervisor 
+              ? "Auditoría y consulta de gastos de toda la flota operativa." 
+              : "Gestiona tus gastos adicionales y falsos fletes registrados."}
           </p>
         </div>
         
-        {!isAdminOrDev && (
+        {/* Solo el transportista puede crear nuevas solicitudes */}
+        {isTransportista && (
             <Button
-            onClick={() => navigate("/mis-solicitudes/nueva")}
-            className="w-full sm:w-auto gap-2 shadow-lg shadow-brand-500/20"
+              onClick={() => navigate("/mis-solicitudes/nueva")}
+              className="w-full sm:w-auto gap-2 shadow-lg shadow-brand-500/20"
             >
-            <Plus className="w-5 h-5" />
-            Nueva Solicitud
+              <Plus className="w-5 h-5" />
+              Nueva Solicitud
             </Button>
         )}
       </div>
@@ -93,14 +96,14 @@ export default function MyRequests() {
         <div className="relative flex-1">
           <Search className="absolute left-4 top-3.5 h-5 w-5 text-gray-400" />
           <Input
-            placeholder={isAdminOrDev 
+            placeholder={isSupervisor 
               ? "Buscar por N° Transporte, Transportista o Aprobador..." 
               : "Buscar por N° Transporte o Aprobador..."}
             className="pl-12 h-12 text-base bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 dark:text-white shadow-sm"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setCurrentPage(1); // Reiniciar a página 1 al realizar búsqueda global
+              setCurrentPage(1);
             }}
           />
         </div>
@@ -127,7 +130,7 @@ export default function MyRequests() {
       {/* Grid de Solicitudes */}
       {loading ? (
         <div className="text-center py-20 text-gray-500 dark:text-gray-400 font-medium animate-pulse">
-          Consultando registros globales...
+          Consultando registros operativos...
         </div>
       ) : requests.length === 0 ? (
         <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border-2 border-dashed border-gray-200 dark:border-slate-700">
@@ -138,18 +141,18 @@ export default function MyRequests() {
             Sin resultados
           </h3>
           <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1">
-            No se encontraron solicitudes que coincidan con la búsqueda global.
+            No se encontraron solicitudes con los filtros actuales.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4">
             {requests.map((req) => (
-              <RequestCard key={req.id} request={req} isAdminOrDev={isAdminOrDev} />
+              <RequestCard key={req.id} request={req} isSupervisor={isSupervisor} />
             ))}
           </div>
 
-          {/* Controles de Paginación de 10 en 10 */}
+          {/* Controles de Paginación */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 bg-gray-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-800">
             <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
               Página <span className="text-brand-700 dark:text-brand-400 font-bold">{currentPage}</span> de {totalPages || 1} 
@@ -183,7 +186,7 @@ export default function MyRequests() {
   );
 }
 
-function RequestCard({ request, isAdminOrDev }) {
+function RequestCard({ request, isSupervisor }) {
   const safeFormatDate = (dateStr) => {
     if (!dateStr) return null;
     try {
@@ -204,7 +207,6 @@ function RequestCard({ request, isAdminOrDev }) {
     }
   };
 
-  // En la Vista, los nombres de perfil se llaman nombre_aprobador_asignado y nombre_aprobador_real
   const fueIntervenidoPorAdmin = request.resolutor_id && request.resolutor_id !== request.usuario_id && request.estado !== "pendiente";
   const fSolicitud = safeFormatDate(request.created_at) || "---";
   const fFactura = request.fecha_factura ? safeFormatDate(request.fecha_factura + "T00:00:00") : null;
@@ -243,14 +245,18 @@ function RequestCard({ request, isAdminOrDev }) {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-sm text-gray-500 dark:text-gray-400 border-t border-gray-50 dark:border-slate-700/50 pt-3">
               <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-gray-400" /> {request.zona}</span>
-              {isAdminOrDev && (
+              
+              {/* Solo los supervisores ven el nombre del transportista en esta vista */}
+              {isSupervisor && (
                 <span className="flex items-center gap-1.5 text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/20 px-2 py-0.5 rounded text-[11px] font-bold border border-brand-100 dark:border-brand-800">
                    <Truck className="w-3 h-3" /> {request.nombre_transportista}
                 </span>
               )}
+
               <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-slate-700 px-2 py-0.5 rounded text-[11px] font-semibold border border-gray-100 dark:border-slate-600">
                 <User className="w-3 h-3" /> Aprobador: {request.nombre_aprobador_asignado}
               </span>
+
               {fueIntervenidoPorAdmin && (
                 <span className={cn("flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold border", request.estado === "rechazado" ? "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-300" : "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-300")}>
                   {request.estado === "rechazado" ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}

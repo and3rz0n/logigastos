@@ -30,7 +30,8 @@ export default function GeneralHistory() {
   const [sapFilters, setSapFilters] = useState({
     posiciones: [],
     condiciones: [],
-    cuentas: []
+    cuentas: [],
+    tiposGasto: [] // NUEVO: Lista dinámica de tipos de gasto
   });
 
   // Estados de Paginación
@@ -42,13 +43,15 @@ export default function GeneralHistory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     tipo_gasto: "all",
-    estado: "all",
+    estado: "all", // Mapea a "aprobado" / "rechazado"
     posicion: "all",
     clase_de_condicion: "all",
     tipo_de_cuenta: "all",
     motivo: "all",
-    fe_registro: "",
-    fe_factura: ""
+    fechaInicioReg: "",
+    fechaFinReg: "",
+    fechaInicioFac: "",
+    fechaFinFac: ""
   });
 
   // Carga inicial de maestros y filtros dinámicos
@@ -71,7 +74,7 @@ export default function GeneralHistory() {
       getGeneralHistoryUniqueFilters()
     ]);
     setMotivosMaster(masters.motivos || []);
-    setSapFilters(sapUnique); // Esto llena los desplegables de Posición, Condición y Cuenta con datos reales
+    setSapFilters(sapUnique); // Esto llena los desplegables con datos reales (incluyendo tiposGasto)
   };
 
   const loadHistory = async () => {
@@ -104,19 +107,25 @@ export default function GeneralHistory() {
         "FF - V (m3)", "FF - P.Unitario (S/)", "FF - Total (S/)", "Validación monto FF", "Volumen minimo", 
         "V. Cargado (m3)", "Tarifa (PEN/m3)", "Monto para liquidar - Carga < al % mínimo (S/)", "Monto Carga %Mín - Programador", 
         "CeCo", "IDCeCo", "Validación Analista", "Comentarios Analista", "Correo de solicitud de aprobación (Asunto)", 
-        "Gasto autorizado", "¿Pagar?", "Monto Total", "Posición", "Clase de condición", "Tipo de Cuenta"
+        "Gasto autorizado", "¿Pagado?", "Monto Total", "Posición", "Clase de condición", "Tipo de Cuenta"
       ];
 
-      const rows = dataToExport.map(item => [
-        item.fe_registro, item.nombre_proveedor, item.placa_asociada, item.capacidad_camion, item.nro_transporte,
-        item.fe_factura, item.canal, item.nombre_destinatario, item.nombre_solicitante, item.zona,
-        item.tipo_gasto, item.motivo, item.ga_total_pen, item.ga_sustento, item.ff_ruta,
-        item.ff_v_m3, item.ff_p_unitario_pen, item.ff_total_pen, item.validacion_monto_ff, item.volumen_minimo,
-        item.v_cargado_m3, item.tarifa_pen_m3, item.monto_liquidar_carga_min_pen, item.monto_carga_min_programador,
-        item.ceco, item.id_ceco, item.validacion_analista, item.comentarios_analista, item.correo_asunto,
-        item.gasto_autorizado ? 'VERDADERO' : 'FALSO', item.pagar, item.monto_total, item.posicion,
-        item.clase_de_condicion, item.tipo_de_cuenta
-      ]);
+      const rows = dataToExport.map(item => {
+        // Traducción de valores para el Excel
+        const isApproved = item.validacion_analista === 'VERDADERO' || item.validacion_analista === true;
+        const statusText = isApproved ? 'Aprobado' : 'Rechazado';
+        
+        return [
+          item.fe_registro, item.nombre_proveedor, item.placa_asociada, item.capacidad_camion, item.nro_transporte,
+          item.fe_factura, item.canal, item.nombre_destinatario, item.nombre_solicitante, item.zona,
+          item.tipo_gasto, item.motivo, item.ga_total_pen, item.ga_sustento, item.ff_ruta,
+          item.ff_v_m3, item.ff_p_unitario_pen, item.ff_total_pen, item.validacion_monto_ff, item.volumen_minimo,
+          item.v_cargado_m3, item.tarifa_pen_m3, item.monto_liquidar_carga_min_pen, item.monto_carga_min_programador,
+          item.ceco, item.id_ceco, statusText, item.comentarios_analista, item.correo_asunto,
+          statusText, item.pagar, item.monto_total, item.posicion,
+          item.clase_de_condicion, item.tipo_de_cuenta
+        ]
+      });
 
       const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(";")).join("\n");
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -137,7 +146,7 @@ export default function GeneralHistory() {
   const isFiltered = searchTerm !== "" || Object.values(filters).some(v => v !== "all" && v !== "");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Cabecera con Botón Esmeralda dinámico */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -178,14 +187,19 @@ export default function GeneralHistory() {
           />
         </div>
 
-        {/* Cuadrícula de Filtros */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-          <FilterSelect label="Tipo Gasto" value={filters.tipo_gasto} options={["all", "Gasto adicional", "Falso Flete", "Carga < al % mínimo"]} onChange={(v) => {setFilters({...filters, tipo_gasto: v}); setCurrentPage(1);}} />
+        {/* --- FILA 1 DE FILTROS: Categorías y Estados --- */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pb-4 border-b border-gray-100 dark:border-slate-700/50">
+          <FilterSelect 
+            label="Tipo Gasto" 
+            value={filters.tipo_gasto} 
+            options={["all", ...sapFilters.tiposGasto]} 
+            onChange={(v) => {setFilters({...filters, tipo_gasto: v}); setCurrentPage(1);}} 
+          />
           
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Motivo</label>
             <select 
-              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white outline-none shadow-sm cursor-pointer"
+              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-base font-medium dark:text-white outline-none cursor-pointer"
               value={filters.motivo}
               onChange={(e) => {setFilters({...filters, motivo: e.target.value}); setCurrentPage(1);}}
             >
@@ -195,40 +209,92 @@ export default function GeneralHistory() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Fe. Registro</label>
-            <input 
-              type="date" 
-              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white outline-none shadow-sm"
-              value={filters.fe_registro}
-              onChange={(e) => {setFilters({...filters, fe_registro: e.target.value}); setCurrentPage(1);}}
-            />
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Validación Analista</label>
+            <select 
+              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-base font-medium dark:text-white outline-none cursor-pointer"
+              value={filters.estado}
+              onChange={(e) => {setFilters({...filters, estado: e.target.value}); setCurrentPage(1);}}
+            >
+              <option value="all">Todos</option>
+              <option value="aprobado">✅ Aprobado</option>
+              <option value="rechazado">❌ Rechazado</option>
+            </select>
           </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Fe. Factura</label>
-            <input 
-              type="date" 
-              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white outline-none shadow-sm"
-              value={filters.fe_factura}
-              onChange={(e) => {setFilters({...filters, fe_factura: e.target.value}); setCurrentPage(1);}}
-            />
-          </div>
-
-          {/* Filtros cargados dinámicamente con valores únicos de la DB */}
+          
           <FilterSelect label="Posición" value={filters.posicion} options={["all", ...sapFilters.posiciones]} onChange={(v) => {setFilters({...filters, posicion: v}); setCurrentPage(1);}} />
-          <FilterSelect label="Condición" value={filters.clase_de_condicion} options={["all", ...sapFilters.condiciones]} onChange={(v) => {setFilters({...filters, clase_de_condicion: v}); setCurrentPage(1);}} />
-          <FilterSelect label="Cuenta" value={filters.tipo_de_cuenta} options={["all", ...sapFilters.cuentas]} onChange={(v) => {setFilters({...filters, tipo_de_cuenta: v}); setCurrentPage(1);}} />
-          <FilterSelect label="Estado" value={filters.estado} options={["all", "VERDADERO", "FALSO"]} onChange={(v) => {setFilters({...filters, estado: v}); setCurrentPage(1);}} />
         </div>
+
+        {/* --- FILA 2 DE FILTROS: Rangos de Fechas y Resto SAP --- */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+            {/* Cápsula de Fechas */}
+            <div className="md:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase ml-1 flex items-center gap-1">Rango Fecha de Registro</label>
+                    <div className="flex gap-2">
+                        <Input 
+                            type="date" 
+                            className="h-11 text-base dark:text-white"
+                            value={filters.fechaInicioReg}
+                            onChange={(e) => {setFilters({...filters, fechaInicioReg: e.target.value}); setCurrentPage(1);}}
+                        />
+                        <Input 
+                            type="date" 
+                            className="h-11 text-base dark:text-white"
+                            value={filters.fechaFinReg}
+                            onChange={(e) => {setFilters({...filters, fechaFinReg: e.target.value}); setCurrentPage(1);}}
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase ml-1 flex items-center gap-1">Rango Fecha de Factura</label>
+                    <div className="flex gap-2">
+                        <Input 
+                            type="date" 
+                            className="h-11 text-base dark:text-white"
+                            value={filters.fechaInicioFac}
+                            onChange={(e) => {setFilters({...filters, fechaInicioFac: e.target.value}); setCurrentPage(1);}}
+                        />
+                        <Input 
+                            type="date" 
+                            className="h-11 text-base dark:text-white"
+                            value={filters.fechaFinFac}
+                            onChange={(e) => {setFilters({...filters, fechaFinFac: e.target.value}); setCurrentPage(1);}}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Resto SAP */}
+            <div className="md:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <FilterSelect label="Condición" value={filters.clase_de_condicion} options={["all", ...sapFilters.condiciones]} onChange={(v) => {setFilters({...filters, clase_de_condicion: v}); setCurrentPage(1);}} />
+               <FilterSelect label="Cuenta" value={filters.tipo_de_cuenta} options={["all", ...sapFilters.cuentas]} onChange={(v) => {setFilters({...filters, tipo_de_cuenta: v}); setCurrentPage(1);}} />
+            </div>
+        </div>
+        
+        {/* Botón de Limpiar Fechas (Si hay alguna activa) */}
+        {(filters.fechaInicioReg || filters.fechaFinReg || filters.fechaInicioFac || filters.fechaFinFac) && (
+            <div className="flex justify-end">
+                <button 
+                  onClick={() => {
+                      setFilters({...filters, fechaInicioReg: "", fechaFinReg: "", fechaInicioFac: "", fechaFinFac: ""});
+                      setCurrentPage(1);
+                  }}
+                  className="text-xs font-bold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                >
+                  Limpiar filtros de fecha
+                </button>
+            </div>
+        )}
       </div>
 
       {/* Tabla de Resultados con desplazamiento horizontal */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left border-collapse table-auto">
-            <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+            <thead className="sticky top-0 z-10 bg-brand-900 dark:bg-brand-950 border-b border-brand-800">
               <tr>
-                <Th className="min-w-[120px]">Fe. Registro</Th>
+                <Th>Fe. Registro</Th>
                 <Th className="min-w-[200px]">Nombre del proveedor</Th>
                 <Th className="min-w-[120px]">Placa asociada</Th>
                 <Th>Capacidad Camion</Th>
@@ -258,7 +324,7 @@ export default function GeneralHistory() {
                 <Th className="min-w-[200px]">Comentarios Analista</Th>
                 <Th className="min-w-[250px]">Asunto Correo</Th>
                 <Th>Gasto autorizado</Th>
-                <Th>¿Pagar?</Th>
+                <Th>¿Pagado?</Th>
                 <Th>Monto Total</Th>
                 <Th>Posición</Th>
                 <Th>Clase condición</Th>
@@ -269,15 +335,18 @@ export default function GeneralHistory() {
               {loading ? (
                 <tr><td colSpan="35" className="px-6 py-20 text-center animate-pulse text-gray-400 font-bold text-sm">Sincronizando con el servidor...</td></tr>
               ) : data.length === 0 ? (
-                <tr><td colSpan="35" className="px-6 py-20 text-center text-gray-400 font-medium">No se encontraron registros en el historial maestro.</td></tr>
+                <tr><td colSpan="35" className="px-6 py-20 text-center text-gray-400 font-medium">No se encontraron registros con los filtros aplicados.</td></tr>
               ) : data.map((item, idx) => (
-                <tr key={idx} className="hover:bg-brand-50/30 dark:hover:bg-slate-700/30 transition-colors text-[11px]">
+                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors text-[11px] group">
                   <Td className="font-bold">{new Date(item.fe_registro).toLocaleDateString('es-PE')}</Td>
                   <Td className="text-brand-800 dark:text-brand-400 font-bold uppercase">{item.nombre_proveedor}</Td>
-                  <Td className="font-mono font-bold text-slate-500 dark:text-slate-400">{item.placa_asociada}</Td>
+                  <Td className="font-mono font-bold text-slate-500 dark:text-slate-400">
+                    <span className="bg-gray-100 group-hover:bg-white dark:bg-slate-700 px-2 py-0.5 rounded border border-gray-200 dark:border-slate-600">
+                      {item.placa_asociada}
+                    </span>
+                  </Td>
                   <Td>{item.capacidad_camion} m³</Td>
-                  {/* Número de transporte limpio sin # */}
-                  <Td className="bg-slate-50 dark:bg-slate-900/50 font-bold text-slate-700 dark:text-slate-300">
+                  <Td className="font-bold text-slate-700 dark:text-slate-300">
                     {item.nro_transporte}
                   </Td>
                   <Td className={cn(new Date(item.fe_factura).getTime() === new Date(item.fe_registro).setHours(0,0,0,0) ? "text-amber-600 dark:text-amber-400 italic font-medium" : "")}>
@@ -303,15 +372,20 @@ export default function GeneralHistory() {
                   <Td>{item.monto_carga_min_programador || '---'}</Td>
                   <Td className="font-medium">{item.ceco}</Td>
                   <Td className="font-mono text-[10px] text-gray-400 dark:text-gray-500">{item.id_ceco}</Td>
+                  
+                  {/* Nuevos Badges Visuales */}
                   <Td><BadgeStatus val={item.validacion_analista} /></Td>
+                  
                   <Td className="truncate max-w-[200px]">{item.comentarios_analista}</Td>
                   <Td className="text-[10px] text-gray-400 dark:text-gray-500 italic">{item.correo_asunto}</Td>
-                  <Td className="font-bold text-center">{item.gasto_autorizado ? 'V' : 'F'}</Td>
-                  <Td className="font-bold text-center">{item.pagar}</Td>
-                  <Td className="font-black bg-brand-50/50 dark:bg-brand-900/20 text-brand-900 dark:text-brand-100">S/ {item.monto_total?.toFixed(2)}</Td>
-                  <Td className="font-mono text-center">{item.posicion}</Td>
-                  <Td className="font-mono text-center">{item.clase_de_condicion}</Td>
-                  <Td className="font-mono text-center">{item.tipo_de_cuenta}</Td>
+                  
+                  <Td className="text-center"><BadgeStatus val={item.gasto_autorizado} /></Td>
+                  <Td className="text-center"><BadgePay status={item.pagar} /></Td>
+                  
+                  <Td className="font-black text-brand-900 dark:text-brand-400 whitespace-nowrap text-right pr-6">S/ {item.monto_total?.toFixed(2)}</Td>
+                  <Td className="font-mono text-center text-gray-500">{item.posicion}</Td>
+                  <Td className="font-mono text-center text-gray-500">{item.clase_de_condicion}</Td>
+                  <Td className="font-mono text-center text-gray-500">{item.tipo_de_cuenta}</Td>
                 </tr>
               ))}
             </tbody>
@@ -322,14 +396,14 @@ export default function GeneralHistory() {
         <div className="p-4 bg-gray-50 dark:bg-slate-700/50 border-t border-gray-100 dark:border-slate-600 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Página {currentPage} de {totalPages || 1}</span>
-            <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-gray-100 dark:border-slate-600">Total registros: {totalCount}</span>
+            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-600">Total registros: {totalCount}</span>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1 || loading}>
-              <ChevronLeft className="w-4 h-4" /> Anterior
+            <Button variant="outline" size="sm" className="bg-white dark:bg-slate-800" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1 || loading}>
+              <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || loading}>
-              Siguiente <ChevronRight className="w-4 h-4" />
+            <Button variant="outline" size="sm" className="bg-white dark:bg-slate-800" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || loading}>
+              Siguiente <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
         </div>
@@ -339,17 +413,61 @@ export default function GeneralHistory() {
 }
 
 // Helpers locales de diseño
-function Th({ children, className }) { return <th className={cn("px-4 py-4 text-[10px] font-bold uppercase text-gray-400 dark:text-gray-400 whitespace-nowrap bg-gray-50 dark:bg-slate-800 border-x border-gray-100 dark:border-slate-700", className)}>{children}</th>; }
+function Th({ children, className }) { return <th className={cn("px-4 py-4 text-[10px] font-bold uppercase text-white whitespace-nowrap bg-brand-900 dark:bg-brand-950 border-x border-brand-800/50", className)}>{children}</th>; }
 function Td({ children, className }) { return <td className={cn("px-4 py-3 border-b border-gray-50 dark:border-slate-700/50 text-gray-600 dark:text-gray-300 whitespace-nowrap", className)}>{children}</td>; }
+
 function FilterSelect({ label, value, options, onChange }) {
   return (
     <div className="space-y-1">
       <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{label}</label>
-      <select className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white outline-none shadow-sm cursor-pointer" value={value} onChange={(e) => onChange(e.target.value)}>
+      <select 
+        className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-base font-medium dark:text-white outline-none cursor-pointer" 
+        value={value} 
+        onChange={(e) => onChange(e.target.value)}
+      >
         {options.map((opt, i) => <option key={i} value={opt}>{opt === "all" ? "Todos" : opt}</option>)}
       </select>
     </div>
   );
 }
-function BadgeStatus({ val }) { return <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold border", val === 'VERDADERO' ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800" : "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800")}>{val}</span>; }
-function BadgeFF({ status }) { return <span className={cn("px-2 py-0.5 rounded text-[9px] font-bold", status === 'OK' ? "text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/30" : status === 'Observado' ? "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30" : "text-gray-400")}>{status}</span>; }
+
+function BadgeStatus({ val }) { 
+  const isTrue = val === 'VERDADERO' || val === true;
+  return (
+    <span className={cn(
+      "px-2.5 py-1 rounded-md text-[10px] font-bold border flex items-center justify-center w-fit", 
+      isTrue 
+        ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/50" 
+        : "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50"
+    )}>
+      {isTrue ? "Aprobado" : "Rechazado"}
+    </span>
+  ); 
+}
+
+function BadgePay({ status }) { 
+  const isPaid = status === 'Sí' || status === 'Si';
+  return (
+    <span className={cn(
+      "px-2.5 py-1 rounded-md text-[10px] font-bold border inline-block", 
+      isPaid 
+        ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50" 
+        : "bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:border-slate-600"
+    )}>
+      {isPaid ? "Pagado" : "No Pagado"}
+    </span>
+  ); 
+}
+
+function BadgeFF({ status }) { 
+  return (
+    <span className={cn(
+      "px-2.5 py-1 rounded-md text-[10px] font-bold inline-block border", 
+      status === 'OK' ? "text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-900/30 dark:border-green-800/50" : 
+      status === 'Observado' ? "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-900/30 dark:border-amber-800/50" : 
+      "text-gray-500 bg-gray-100 border-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:border-slate-600"
+    )}>
+      {status}
+    </span>
+  ); 
+}

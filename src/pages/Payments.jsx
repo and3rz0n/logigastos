@@ -167,7 +167,7 @@ export default function Payments() {
             Buscador Global
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <Search className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
             <Input
               placeholder="Picking, Placa, Transportista o Aprobador..."
               className="pl-10 dark:text-white h-12 text-base"
@@ -189,7 +189,7 @@ export default function Payments() {
               </label>
               <Input
                 type="date"
-                className="dark:text-white h-12"
+                className="dark:text-white h-12 text-base"
                 value={dateFrom}
                 onChange={(e) => {
                   setDateFrom(e.target.value);
@@ -203,7 +203,7 @@ export default function Payments() {
               </label>
               <Input
                 type="date"
-                className="dark:text-white h-12"
+                className="dark:text-white h-12 text-base"
                 value={dateTo}
                 onChange={(e) => {
                   setDateTo(e.target.value);
@@ -413,25 +413,49 @@ function PaymentCard({ item, isPending, isSelected, onToggle }) {
           </div>
         </div>
 
-        {/* Sección de Datos Técnicos: Visible y aplanada gracias a la Vista Operativa */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-50 dark:border-slate-700/50">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Vehículo:</span>
-            <span className="font-mono font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/20 px-1.5 py-0.5 rounded border border-brand-100 dark:border-brand-800 text-xs">
-                {item.placa_vehiculo}
-            </span>
+        {/* Sección de Datos Técnicos Rediseñada */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-50 dark:border-slate-700/50">
+          
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Vehículo:</span>
+              <span className="font-mono font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/20 px-1.5 py-0.5 rounded border border-brand-100 dark:border-brand-800 text-xs">
+                  {item.placa_vehiculo || '---'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Área:</span>
+              <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-gray-400 dark:text-gray-500" /> {item.nombre_area || '---'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Picking:</span>
+              <span className="text-xs font-mono font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                {item.nro_transporte_sap || '---'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Posición:</span>
+              <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-400">
+                {item.sap_posicion || '---'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Clase:</span>
+              <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-400">
+                {item.sap_clase_condicion || '---'}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Área:</span>
-            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <MapPin className="w-3 h-3 text-gray-400 dark:text-gray-500" /> {item.nombre_area}
-            </span>
-          </div>
-
-          <div className="sm:col-span-2 flex justify-end items-center gap-2">
+          <div className="flex justify-start lg:justify-end items-center shrink-0">
             {isPending ? (
-              <div className="flex flex-col items-end">
+              <div className="flex flex-col items-start lg:items-end">
                 <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Aprobador Asignado: {item.nombre_aprobador_asignado}</span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-full border border-green-100 dark:border-green-800">
                   <ShieldCheck className="w-3.5 h-3.5" />

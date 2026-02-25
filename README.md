@@ -7,36 +7,47 @@ LogiGastos es una plataforma integral diseñada para centralizar, auditar y proc
 ## 📱 Progressive Web App (PWA) - Novedad 2026
 
 El sistema ha evolucionado a una aplicación móvil instalable (PWA) para facilitar el trabajo de campo de los operadores logísticos:
+
 * **Instalación Nativa:** Capacidad de instalar la aplicación directamente en la pantalla de inicio de dispositivos iOS y Android sin pasar por tiendas de aplicaciones.
 * **Interfaz Standalone:** Experiencia inmersiva sin barra de navegador, con colores de tema personalizados corporativos y motor `Service Worker` impulsado por Vite PWA.
+* **Optimización Mobile (Anti-Zoom):** Implementación de estándares visuales que bloquean el zoom involuntario en dispositivos iOS al interactuar con campos de fecha y selectores, garantizando una navegación fluida en campo.
 
 ---
 
-## 🛡️ Control de Acceso por Roles (RBAC)
+## 🛡️ Control de Acceso por Roles (RBAC) - Actualizado
 
-El sistema implementa una seguridad estricta basada en el perfil del usuario:
+El sistema implementa una seguridad estricta basada en el perfil del usuario, ahora con capacidades extendidas para tesorería:
 
 * **Developer / Admin:** Acceso total, incluyendo el **Historial Maestro**, configuración de reglas de negocio SAP y gestión de maestros.
 * **Operador Logístico (Transportista):** Registro de gastos y consulta exclusiva de sus propias solicitudes.
 * **Aprobador:** Revisión técnica de solicitudes asignadas para validación de montos.
-* **Usuario Pagador (Tesorería):** Gestión de liquidaciones y cierre de estados de pago.
+* **Usuario Pagador (Tesorería):** Elevado a **Rol de Supervisión Global**. Ahora cuenta con acceso al Historial Maestro y a la consulta global de gastos de toda la flota para auditoría previa a la liquidación.
 
 ---
 
 ## 🚀 Mejoras e Implementaciones Core
 
 ### 📈 Dashboards Analíticos de Alto Rendimiento
+
 * **Motor de Descarga Recursiva (Chunking):** Implementación de una función maestra que burla el límite de 1,000 registros por defecto de Supabase, solicitando bloques de datos dinámicos para garantizar que los KPIs gráficos muestren el **100% de la información histórica** sin colapsar el servidor.
 * **Comparativa Anual Dinámica (VS):** Motor lógico que agrupa la información basándose estrictamente en la `fecha_factura`, permitiendo cruzar y renderizar gráficos de barras comparativos (ej. Año 2025 vs 2026) en tiempo real.
 
-### 📊 Explorador de Datos y Auditoría
-* **Paginación Inteligente:** Carga optimizada de registros (50 por página) desde el servidor para garantizar fluidez absoluta en el renderizado, incluso con decenas de miles de filas en la tabla.
-* **Exportación "Smart 10":** Botón dinámico que filtra la data cruda (de 34 columnas) y exporta un archivo Excel/CSV limpio y formateado con las **10 columnas exactas** operativas. Si hay filtros activos, exporta todo el universo filtrado; si no, protege la memoria exportando solo la página actual.
-* **Sincronización de Fechas:** Lógica de visualización que corrige el error de fechas nulas (evitando el desfase de 1969) mostrando fallback entre fecha de registro y factura.
+### 📝 Registro Inteligente de Gastos (UX Pro)
 
-### ⚙️ Gestión de Maestros y Configuración (Settings)
-* **Visibilidad Toggle (Activos/Inactivos):** Implementación de un diseño limpio donde los registros eliminados o deprecados se ocultan por defecto. Mediante un botón inteligente, los administradores pueden revelar y reactivar configuraciones pasadas.
-* **Depuración de Base de Datos:** Algoritmos SQL de limpieza profunda (`TRUNCATE` y `UPDATE`) para mantener la integridad referencial (Foreign Keys) en las cuentas SAP al eliminar motivos de gasto duplicados o mal digitados.
+* **Categorización por Familias:** Selector de Tipo de Gasto organizado jerárquicamente (Gastos Adicionales, Maniobras y Ocupabilidad) mediante grupos visuales (`optgroup`).
+* **Filtro de Motivos Dinámicos:** Implementación de lógica dependiente donde el "Motivo del Gasto" se filtra en tiempo real según el Tipo de Gasto seleccionado, eliminando errores de registro.
+* **Reubicación de Área Atribuible:** Mejora de flujo que posiciona el centro de costo/área al inicio del detalle económico para un llenado más natural.
+
+### ⚖️ Flujo de Aprobación y Auditoría
+
+* **Validación Obligatoria de Correo:** Al aprobar un gasto, el sistema exige ahora el **Asunto del Correo** de autorización, creando una traza de auditoría física vinculada a cada aprobación digital.
+* **Visualización de Datos Operativos:** Las tarjetas de aprobación y pago ahora muestran el **Motivo del Gasto** detallado, facilitando la toma de decisiones sin entrar al detalle del registro.
+
+### 📊 Historial Maestro y Centro de Pagos
+
+* **Rangos de Fecha Duales:** Capacidad de filtrar simultáneamente por rangos de "Fecha de Registro" y "Fecha de Factura".
+* **Traducción Visual de Estados:** Sustitución de valores técnicos (True/False) por cápsulas de estado intuitivas: **Aprobado**, **Rechazado**, **Pagado** y **No Pagado**.
+* **Contexto Financiero SAP:** Inyección visual del Picking, Posición SAP y Clase de Condición en las bandejas de pago para un cruce contable inmediato.
 
 ---
 
@@ -45,35 +56,36 @@ El sistema implementa una seguridad estricta basada en el perfil del usuario:
 ### ⚡ Database Views (SQL)
 
 Se utiliza la vista robusta `view_historial_general` y `view_solicitudes_operativas` para procesar la lógica de negocio en el servidor:
+
 * **Cálculos Automáticos:** Separación lógica de montos para Gastos Adicionales y Falsos Fletes.
 * **Validación de Falso Flete:** Indicador automático (`OK` / `Observado`) que valida si el monto cargado coincide con la multiplicación de volumen por tarifa.
 * **Integridad Contable:** Mapeo de Centros de Costos (CeCo) y tipos de cuenta por motivo sin romper dependencias.
 
-### 🧙‍♂️ Sistema de Migración Maestro (Google Apps Script)
+### 🧹 Saneamiento y Categorización
 
-El script de migración v3 asegura la transición de datos desde Excel/Sheets a Supabase con máxima calidad:
-* **Detector de Fechas DD/MM/YYYY:** Lógica que previene el error de swap de Mes/Día.
-* **Sincronización Automática:** Si una de las fechas (Registro o Factura) está vacía, el script la completa con el valor de la otra.
-* **Mapeo SAP Integrado:** Asignación automática de Posición, Clase de Condición y Cuenta Contable durante la homogenización.
+* **Maestro de Motivos Evolucionado:** Nueva estructura en la tabla `maestro_motivos` que incluye la columna `tipo_gasto`, permitiendo la jerarquía de motivos por categoría.
+* **Script de Rescate Histórico:** Ejecución de algoritmos SQL para inyectar Posiciones y Clases SAP faltantes en registros antiguos, normalizando el 100% de la base de datos histórica.
 
 ---
 
 ## 📂 Estructura de Archivos Clave
 
-* `/src/pages/dashboard/`: Componentes modulares para métricas, gráficos Recharts y vistas operativas.
-* `/src/pages/DataExplorer.jsx`: Componente maestro de la tabla de auditoría con paginación server-side.
-* `/src/services/dashboard.js`: Motor de extracción recursiva y cálculos matemáticos para analítica.
-* `/vite.config.js`: Configuración de empaquetado e inyección del Service Worker para la PWA.
-* `Migracion_GAS_v3.js`: Motor de limpieza y homogenización de datos históricos.
+* `/src/pages/Approvals.jsx`: Gestión de aprobaciones con captura de asunto de correo y validación técnica.
+* `/src/pages/Payments.jsx`: Centro de liquidación masiva con visualización de códigos SAP y picking.
+* `/src/pages/GeneralHistory.jsx`: Componente de auditoría global con filtros dinámicos y rangos de fecha.
+* `/src/pages/NewRequest.jsx`: Formulario inteligente con motivos dinámicos y tipos de gasto agrupados.
+* `/src/services/requests.js`: Motor central de peticiones con lógica de RBAC para Pagadores y limpieza de filtros en memoria.
+* `/src/components/layout/Sidebar.jsx`: Menú lateral dinámico con control de accesos por rol y selector de apariencia simplificado (Dark/Light).
 
 ---
 
 ## 🛠️ Instalación y Requerimientos
 
 1. **Frontend:** React con Vite, Tailwind CSS y Vite-PWA.
-2. **Backend:** Supabase (PostgreSQL) con RLS activado.
-3. **Variables de Entorno:** Configurar `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+2. **Backend:** Supabase (PostgreSQL) con RLS activado y Vistas SQL Operativas.
+3. **Variables de Env:** Configurar `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 4. **Ejecución:**
+
 ```bash
 npm install
 npm run dev
@@ -89,3 +101,13 @@ npm run dev
 ### 👤 Autor
 
 **Anderson Cabanillas** - *Developer*
+
+---
+
+### Explicación de los Cambios Realizados:
+
+1. **Actualización de Roles:** Se documentó formalmente que el **Pagador** ahora es un rol de supervisión global con acceso a historiales y gastos de toda la flota.
+2. **Nuevas Funcionalidades de Filtro:** Se agregaron los **rangos de fechas duales** y los **filtros dinámicos** de tipos de gasto que ahora leen directamente de la base de datos.
+3. **Auditoría y SAP:** Se incluyó la explicación del nuevo campo `asunto_correo` para aprobación y la visualización de datos técnicos (Picking/Posición) en la bandeja de pagos.
+4. **UX en Registro:** Se detalló la nueva estructura del formulario con **motivos dependientes** y tipos de gasto agrupados.
+5. **Limpieza Visual:** Se registró el cambio en el Sidebar para simplificar el selector de apariencia (eliminando el modo sistema) y la optimización Anti-Zoom para móviles.

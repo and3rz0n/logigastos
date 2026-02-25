@@ -41,6 +41,52 @@ const calcularCategoria = (fechaRegistro, fechaFactura) => {
   return diffDays > 7 ? 'Desfase' : 'A tiempo';
 };
 
+// NUEVA FUNCIÓN OPTIMIZADA: Extrae el rango de años dinámicos desde la BD
+export const getAvailableYears = async () => {
+  try {
+    // 1. Obtenemos solo la fecha de la solicitud MÁS ANTIGUA
+    const { data: oldestData, error: errorOldest } = await supabase
+      .from('view_solicitudes_operativas')
+      .select('created_at')
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    // 2. Obtenemos solo la fecha de la solicitud MÁS RECIENTE
+    const { data: newestData, error: errorNewest } = await supabase
+      .from('view_solicitudes_operativas')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (errorOldest || errorNewest) throw new Error('Error consultando rangos de fechas');
+
+    const currentYear = new Date().getFullYear();
+    let minYear = currentYear;
+    let maxYear = currentYear;
+
+    if (oldestData && oldestData.length > 0 && oldestData[0].created_at) {
+      minYear = new Date(oldestData[0].created_at).getFullYear();
+    }
+
+    if (newestData && newestData.length > 0 && newestData[0].created_at) {
+      maxYear = new Date(newestData[0].created_at).getFullYear();
+    }
+
+    // 3. Generamos el array con todos los años en el rango (Ej: 2026, 2025, 2024)
+    const yearsArray = [];
+    for (let y = maxYear; y >= minYear; y--) {
+      yearsArray.push(y.toString());
+    }
+
+    // Retorna el array de años. Si la BD está vacía, devuelve al menos el año actual.
+    return yearsArray.length > 0 ? yearsArray : [currentYear.toString()];
+    
+  } catch (error) {
+    console.error('Error fetching available years:', error);
+    return [new Date().getFullYear().toString()];
+  }
+};
+
 // ------------------------------------------------------------------
 // 1. DASHBOARD GLOBAL (Para Admins, Pagadores y Visualizadores)
 // ------------------------------------------------------------------
@@ -48,15 +94,31 @@ export const getGlobalDashboardStats = async (filters = {}) => {
   try {
     let query = supabase
       .from('solicitudes_gastos')
-      .select('id, total_gasto, tipo_gasto, estado, created_at, fecha_factura');
+      .select('id, total_gasto, tipo_gasto, estado, created_at, fecha_factura')
+      .in('estado', ['aprobado', 'pagado']); // REGLA: Solo dinero real
 
-    if (filters.fechaInicio && filters.fechaFin) {
-        query = query.gte('created_at', `${filters.fechaInicio}T00:00:00`)
-                     .lte('created_at', `${filters.fechaFin}T23:59:59`);
-    } else if (filters.year && filters.month) {
-        const start = new Date(filters.year, filters.month - 1, 1).toISOString();
-        const end = new Date(filters.year, filters.month, 0, 23, 59, 59).toISOString();
-        query = query.gte('created_at', start).lte('created_at', end);
+    // FILTRO 1: Rango de Registro o Año/Mes
+    if (filters.fechaInicioReg && filters.fechaFinReg) {
+        query = query.gte('created_at', `${filters.fechaInicioReg}T00:00:00`)
+                     .lte('created_at', `${filters.fechaFinReg}T23:59:59`);
+    } else if (filters.year && filters.year !== 'all') {
+        const y = parseInt(filters.year);
+        if (filters.month && filters.month !== 'all') {
+            const m = parseInt(filters.month);
+            const start = new Date(y, m - 1, 1).toISOString();
+            const end = new Date(y, m, 0, 23, 59, 59).toISOString();
+            query = query.gte('created_at', start).lte('created_at', end);
+        } else {
+            const start = new Date(y, 0, 1).toISOString();
+            const end = new Date(y, 11, 31, 23, 59, 59).toISOString();
+            query = query.gte('created_at', start).lte('created_at', end);
+        }
+    }
+
+    // FILTRO 2: Rango de Factura (Se suma a la consulta si existe)
+    if (filters.fechaInicioFac && filters.fechaFinFac) {
+        query = query.gte('fecha_factura', filters.fechaInicioFac)
+                     .lte('fecha_factura', filters.fechaFinFac);
     }
 
     query = query.order('created_at', { ascending: false });
@@ -106,20 +168,38 @@ export const getDriverDashboardStats = async (driverId, filters = {}) => {
 
     query = query.eq('transportista_id', driverId);
 
-    if (filters.fechaInicio && filters.fechaFin) {
-        query = query.gte('created_at', `${filters.fechaInicio}T00:00:00`)
-                     .lte('created_at', `${filters.fechaFin}T23:59:59`);
-    } else if (filters.year && filters.month) {
-        const start = new Date(filters.year, filters.month - 1, 1).toISOString();
-        const end = new Date(filters.year, filters.month, 0, 23, 59, 59).toISOString();
-        query = query.gte('created_at', start).lte('created_at', end);
+    // FILTRO 1: Rango de Registro o Año/Mes
+    if (filters.fechaInicioReg && filters.fechaFinReg) {
+        query = query.gte('created_at', `${filters.fechaInicioReg}T00:00:00`)
+                     .lte('created_at', `${filters.fechaFinReg}T23:59:59`);
+    } else if (filters.year && filters.year !== 'all') {
+        const y = parseInt(filters.year);
+        if (filters.month && filters.month !== 'all') {
+            const m = parseInt(filters.month);
+            const start = new Date(y, m - 1, 1).toISOString();
+            const end = new Date(y, m, 0, 23, 59, 59).toISOString();
+            query = query.gte('created_at', start).lte('created_at', end);
+        } else {
+            const start = new Date(y, 0, 1).toISOString();
+            const end = new Date(y, 11, 31, 23, 59, 59).toISOString();
+            query = query.gte('created_at', start).lte('created_at', end);
+        }
+    }
+
+    // FILTRO 2: Rango de Factura
+    if (filters.fechaInicioFac && filters.fechaFinFac) {
+        query = query.gte('fecha_factura', filters.fechaInicioFac)
+                     .lte('fecha_factura', filters.fechaFinFac);
     }
 
     query = query.order('created_at', { ascending: false });
 
     const reqs = await fetchAllPages(query);
 
-    const acumulado = reqs.reduce((acc, curr) => acc + (curr.total_gasto || 0), 0);
+    const acumulado = reqs
+      .filter(item => ['aprobado', 'pagado'].includes(item.estado))
+      .reduce((acc, curr) => acc + (curr.total_gasto || 0), 0);
+      
     const pendiente = reqs
       .filter(item => item.estado === 'aprobado' || item.estado === 'pendiente')
       .reduce((acc, curr) => acc + (curr.total_gasto || 0), 0);
@@ -127,7 +207,9 @@ export const getDriverDashboardStats = async (driverId, filters = {}) => {
     const ultimosPagos = reqs.filter(item => item.estado === 'pagado');
     const ultimoPago = ultimosPagos.length > 0 ? ultimosPagos[0].total_gasto : 0;
 
-    const porTipoRaw = reqs.reduce((acc, curr) => {
+    // Solo mostrar dinero real en gráficos
+    const reqsDineroReal = reqs.filter(item => ['aprobado', 'pagado'].includes(item.estado));
+    const porTipoRaw = reqsDineroReal.reduce((acc, curr) => {
       const tipo = curr.tipo_gasto || 'Otros';
       acc[tipo] = (acc[tipo] || 0) + (curr.total_gasto || 0);
       return acc;
@@ -210,13 +292,28 @@ export const getApproverDashboardStats = async (approverId, filters = {}) => {
       }
     }
 
-    if (filters.fechaInicio && filters.fechaFin) {
-        query = query.gte('created_at', `${filters.fechaInicio}T00:00:00`)
-                     .lte('created_at', `${filters.fechaFin}T23:59:59`);
-    } else if (filters.year && filters.month) {
-        const start = new Date(filters.year, filters.month - 1, 1).toISOString();
-        const end = new Date(filters.year, filters.month, 0, 23, 59, 59).toISOString();
-        query = query.gte('created_at', start).lte('created_at', end);
+    // FILTRO 1: Rango de Registro o Año/Mes
+    if (filters.fechaInicioReg && filters.fechaFinReg) {
+        query = query.gte('created_at', `${filters.fechaInicioReg}T00:00:00`)
+                     .lte('created_at', `${filters.fechaFinReg}T23:59:59`);
+    } else if (filters.year && filters.year !== 'all') {
+        const y = parseInt(filters.year);
+        if (filters.month && filters.month !== 'all') {
+            const m = parseInt(filters.month);
+            const start = new Date(y, m - 1, 1).toISOString();
+            const end = new Date(y, m, 0, 23, 59, 59).toISOString();
+            query = query.gte('created_at', start).lte('created_at', end);
+        } else {
+            const start = new Date(y, 0, 1).toISOString();
+            const end = new Date(y, 11, 31, 23, 59, 59).toISOString();
+            query = query.gte('created_at', start).lte('created_at', end);
+        }
+    }
+
+    // FILTRO 2: Rango de Factura
+    if (filters.fechaInicioFac && filters.fechaFinFac) {
+        query = query.gte('fecha_factura', filters.fechaInicioFac)
+                     .lte('fecha_factura', filters.fechaFinFac);
     }
 
     query = query.order('updated_at', { ascending: false });
@@ -314,46 +411,35 @@ export const getAnalyticsStats = async (filters = {}) => {
         transportista:profiles!solicitudes_gastos_transportista_id_fkey ( nombre_completo ),
         destinatario:destinatarios ( canal )
       `)
-      .neq('estado', 'rechazado');
+      .in('estado', ['aprobado', 'pagado']); // REGLA: Solo dinero real
 
     const selectedYear = filters.year || new Date().getFullYear().toString();
     const currentYear = new Date().getFullYear().toString();
     const previousYear = (new Date().getFullYear() - 1).toString();
     
-    if (selectedYear === 'all') {
-      query = query.gte('fecha_factura', `${previousYear}-01-01`)
-                   .lte('fecha_factura', `${currentYear}-12-31`);
+    // El gráfico analítico requiere los datos de TODO EL AÑO para dibujar la gráfica de líneas,
+    // El filtro de MES lo aplicaremos localmente después para los otros KPIs.
+    if (filters.fechaInicioReg && filters.fechaFinReg) {
+        query = query.gte('created_at', `${filters.fechaInicioReg}T00:00:00`)
+                     .lte('created_at', `${filters.fechaFinReg}T23:59:59`);
+    } else if (selectedYear === 'all') {
+        const start = new Date(parseInt(previousYear), 0, 1).toISOString();
+        const end = new Date(parseInt(currentYear), 11, 31, 23, 59, 59).toISOString();
+        query = query.gte('created_at', start).lte('created_at', end);
     } else {
-      query = query.gte('fecha_factura', `${selectedYear}-01-01`)
-                   .lte('fecha_factura', `${selectedYear}-12-31`);
+        const start = new Date(parseInt(selectedYear), 0, 1).toISOString();
+        const end = new Date(parseInt(selectedYear), 11, 31, 23, 59, 59).toISOString();
+        query = query.gte('created_at', start).lte('created_at', end);
+    }
+
+    if (filters.fechaInicioFac && filters.fechaFinFac) {
+        query = query.gte('fecha_factura', filters.fechaInicioFac)
+                     .lte('fecha_factura', filters.fechaFinFac);
     }
 
     const reqs = await fetchAllPages(query);
 
-    const rankingRaw = reqs.reduce((acc, curr) => {
-      const nombre = curr.transportista?.nombre_completo || 'Desconocido';
-      acc[nombre] = (acc[nombre] || 0) + (curr.total_gasto || 0);
-      return acc;
-    }, {});
-    
-    const ranking = Object.keys(rankingRaw)
-      .map(name => ({ name, value: rankingRaw[name] }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
-    const canalesRaw = reqs.reduce((acc, curr) => {
-      const canal = curr.destinatario?.canal || 'Sin Canal';
-      acc[canal] = (acc[canal] || 0) + (curr.total_gasto || 0);
-      return acc;
-    }, {});
-
-    const COLORS = ['#0ea5e9', '#f97316', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#3b82f6'];
-    const canales = Object.keys(canalesRaw).map((name, index) => ({
-      name,
-      value: canalesRaw[name],
-      color: COLORS[index % COLORS.length]
-    }));
-
+    // 1. CALCULAR VARIACIÓN MENSUAL (Usando TODA la data descargada, ignorando el filtro local de mes)
     const mesesBase = [
         { name: 'Ene', num: 0 }, { name: 'Feb', num: 1 }, { name: 'Mar', num: 2 },
         { name: 'Abr', num: 3 }, { name: 'May', num: 4 }, { name: 'Jun', num: 5 },
@@ -379,8 +465,9 @@ export const getAnalyticsStats = async (filters = {}) => {
     });
 
     reqs.forEach(curr => {
-        if (curr.fecha_factura) {
-            const date = new Date(curr.fecha_factura + 'T00:00:00');
+        // AHORA BASADO EN FECHA DE REGISTRO
+        if (curr.created_at) {
+            const date = new Date(curr.created_at);
             const mesNombre = mesesBase.find(m => m.num === date.getMonth())?.name;
             const docYear = date.getFullYear().toString();
 
@@ -400,7 +487,39 @@ export const getAnalyticsStats = async (filters = {}) => {
 
     const variacionMensual = Object.values(variacionMensualMap);
 
-    const motivosRaw = reqs.reduce((acc, curr) => {
+    // 2. FILTRO LOCAL DE MES: Aplicamos el filtro para los demás KPIs y Gráficos
+    let filteredReqs = reqs;
+    if (filters.month && filters.month !== 'all') {
+        const selectedMonthIndex = parseInt(filters.month) - 1; // 0-11
+        filteredReqs = reqs.filter(r => new Date(r.created_at).getMonth() === selectedMonthIndex);
+    }
+
+    // 3. CALCULAR RESTO DE KPIs CON LA DATA FILTRADA POR MES
+    const rankingRaw = filteredReqs.reduce((acc, curr) => {
+      const nombre = curr.transportista?.nombre_completo || 'Desconocido';
+      acc[nombre] = (acc[nombre] || 0) + (curr.total_gasto || 0);
+      return acc;
+    }, {});
+    
+    const ranking = Object.keys(rankingRaw)
+      .map(name => ({ name, value: rankingRaw[name] }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+
+    const canalesRaw = filteredReqs.reduce((acc, curr) => {
+      const canal = curr.destinatario?.canal || 'Sin Canal';
+      acc[canal] = (acc[canal] || 0) + (curr.total_gasto || 0);
+      return acc;
+    }, {});
+
+    const COLORS = ['#0ea5e9', '#f97316', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#3b82f6'];
+    const canales = Object.keys(canalesRaw).map((name, index) => ({
+      name,
+      value: canalesRaw[name],
+      color: COLORS[index % COLORS.length]
+    }));
+
+    const motivosRaw = filteredReqs.reduce((acc, curr) => {
       const tipo = curr.tipo_gasto || 'Otros';
       acc[tipo] = (acc[tipo] || 0) + (curr.total_gasto || 0);
       return acc;
@@ -413,9 +532,9 @@ export const getAnalyticsStats = async (filters = {}) => {
     return {
       ranking,
       canales,
-      variacionMensual,
+      variacionMensual, // Gráfico anual se mantiene intacto
       motivos,
-      totalAcumulado: reqs.reduce((acc, curr) => acc + (curr.total_gasto || 0), 0)
+      totalAcumulado: filteredReqs.reduce((acc, curr) => acc + (curr.total_gasto || 0), 0)
     };
 
   } catch (error) {
@@ -437,16 +556,37 @@ export const getExploradorData = async (filters = {}, page = 1, pageSize = 50, f
     // --- APLICACIÓN DE FILTROS EN BASE DE DATOS ---
     if (filters.searchTerm) {
       const term = `%${filters.searchTerm}%`;
-      // Corrección aquí: Usamos los nombres de columna correctos de la vista
       query = query.or(`picking.ilike.${term},nombre_proveedor.ilike.${term},placa.ilike.${term}`);
     }
+    
     if (filters.area && filters.area !== 'all') query = query.eq('area_atribuible', filters.area);
     if (filters.tipo && filters.tipo !== 'all') query = query.eq('tipo_gasto', filters.tipo);
-    // Corrección aquí: La vista de supabase devuelve el año como texto en algunos casos
-    if (filters.year && filters.year !== 'all') query = query.or(`anio.eq.${filters.year},fecha_factura.ilike.%${filters.year}%`);
-    if (filters.month && filters.month !== 'all') query = query.ilike('mes', filters.month);
+    if (filters.estado && filters.estado !== 'all') query = query.eq('estado', filters.estado);
 
-    query = query.order('fecha_factura', { ascending: false });
+    // FILTRO DE FECHAS (Prioridad Registro, luego Factura)
+    if (filters.fechaInicioReg && filters.fechaFinReg) {
+        query = query.gte('created_at', `${filters.fechaInicioReg}T00:00:00`)
+                     .lte('created_at', `${filters.fechaFinReg}T23:59:59`);
+    } else if (filters.year && filters.year !== 'all') {
+        const y = parseInt(filters.year);
+        if (filters.month && filters.month !== 'all') {
+            const m = parseInt(filters.month);
+            const start = new Date(y, m - 1, 1).toISOString();
+            const end = new Date(y, m, 0, 23, 59, 59).toISOString();
+            query = query.gte('created_at', start).lte('created_at', end);
+        } else {
+            const start = new Date(y, 0, 1).toISOString();
+            const end = new Date(y, 11, 31, 23, 59, 59).toISOString();
+            query = query.gte('created_at', start).lte('created_at', end);
+        }
+    }
+
+    if (filters.fechaInicioFac && filters.fechaFinFac) {
+        query = query.gte('fecha_factura', filters.fechaInicioFac)
+                     .lte('fecha_factura', filters.fechaFinFac);
+    }
+
+    query = query.order('created_at', { ascending: false }); // Cambio ordenamiento a fecha de registro
 
     if (fetchAll) {
       // Para Exportar Excel: Ignora páginas y trae TODO lo filtrado usando la función maestra

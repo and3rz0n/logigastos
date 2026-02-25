@@ -6,8 +6,7 @@ export function Modal({
   isOpen, 
   onClose, 
   title, 
-  children, // <--- ESTO ES LA CLAVE: Recibir el contenido interno
-  // Props para modo Alerta (opcionales)
+  children, 
   onConfirm, 
   message, 
   confirmText = "Confirmar", 
@@ -16,7 +15,7 @@ export function Modal({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 sm:p-6">
       {/* Fondo oscuro con desenfoque */}
       <div 
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
@@ -24,57 +23,55 @@ export function Modal({
       />
 
       {/* Contenedor del Modal */}
-      <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden transform transition-all animate-in fade-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:zoom-in duration-300">
         
         {/* Cabecera */}
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
-           {/* Si es alerta, mostramos icono. Si es formulario (children), no mostramos icono para ganar espacio */}
-           {!children && variant === 'danger' && (
-              <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-           )}
-           
-           <h3 className="text-xl font-bold text-gray-900 dark:text-white font-sans flex-1">
-             {title}
-           </h3>
+        <div className="px-6 py-5 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
+           <div className="flex items-center overflow-hidden">
+             {!children && variant === 'danger' && (
+                <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center mr-3 shrink-0">
+                  <AlertTriangle className="w-6 h-6 shrink-0" />
+                </div>
+             )}
+             
+             <h3 className="text-xl font-bold text-gray-900 dark:text-white font-sans truncate">
+               {title}
+             </h3>
+           </div>
            
            <button 
              onClick={onClose}
-             className="text-gray-400 hover:text-gray-500 transition-colors p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"
+             className="text-gray-400 hover:text-gray-500 transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 shrink-0"
            >
-             <X className="w-6 h-6" />
+             <X className="w-6 h-6 shrink-0" />
            </button>
         </div>
 
         {/* Cuerpo del Modal */}
-        <div className="p-6">
+        <div className="p-6 max-h-[80vh] overflow-y-auto">
           {children ? (
-            // CASO A: Es un formulario o contenido personalizado
-            // Renderizamos los inputs, selectores, etc.
             children
           ) : (
-            // CASO B: Es una alerta simple
-            // Renderizamos solo el mensaje de texto
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
+            <p className="text-gray-600 dark:text-gray-400 text-base leading-relaxed">
               {message}
             </p>
           )}
         </div>
 
-        {/* Pie del Modal (Solo automático si NO hay children) */}
-        {/* Si hay children, asumimos que el formulario trae sus propios botones */}
+        {/* Pie del Modal */}
         {!children && onConfirm && (
-          <div className="bg-gray-50 dark:bg-slate-900/50 px-6 py-4 flex justify-end gap-3">
+          <div className="bg-gray-50 dark:bg-slate-900/50 px-6 py-4 flex flex-col-reverse sm:flex-row justify-end gap-3">
             <Button 
-              variant="outline" 
+              variant="secondary" 
               onClick={onClose}
+              className="w-full sm:w-auto"
             >
               Cancelar
             </Button>
             <Button 
               onClick={onConfirm}
-              className={variant === 'danger' ? 'bg-red-600 hover:bg-red-700' : ''}
+              variant={variant === 'danger' ? 'danger' : 'primary'}
+              className="w-full sm:w-auto"
             >
               {confirmText}
             </Button>
