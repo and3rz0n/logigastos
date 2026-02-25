@@ -579,12 +579,12 @@ export default function NewRequest() {
 
               {/* Ahora Maniobras se verá como un encabezado oscuro */}
               <optgroup label="2. Maniobras">
-                <option value="Maniobras">Seleccionar Maniobras</option>
+                <option value="Maniobras">2.1. Maniobras</option>
               </optgroup>
 
               <optgroup label="3. Ocupabilidad">
                 <option value="Carga < al % mínimo">
-                  3.1. (Carga &lt; al % mínimo)
+                  3.1. Carga &lt; al % mínimo
                 </option>
               </optgroup>
             </select>
