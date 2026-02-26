@@ -10,7 +10,8 @@ import { supabase } from '../services/supabase';
 import { 
   getSystemConfig, updateSystemConfig, getAllVehicles, saveVehicle, 
   getSapMappings, saveSapMapping, toggleSapMappingStatus, updateZonaPorcentaje,
-  getAllDestinatarios, saveDestinatario, toggleDestinatarioStatus
+  getAllDestinatarios, saveDestinatario, toggleDestinatarioStatus,
+  createOrGetMotivo, rollbackMotivo // <-- Nuevas funciones importadas
 } from '../services/requests';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -44,7 +45,6 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* Menú de Pestañas Mejorado (Se eliminó "Motivos Gasto" para centralizarlo en Cuentas SAP) */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-700 pb-1">
         <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={Users} label="Usuarios" />
         <TabButton active={activeTab === 'clientes'} onClick={() => setActiveTab('clientes')} icon={Building2} label="Clientes" />
@@ -92,29 +92,20 @@ function ClientesManager() {
   });
 
   useEffect(() => { loadData(); }, []);
-  
-  // Cuando el usuario busca o cambia de pestaña, regresamos a la página 1
   useEffect(() => { setCurrentPage(1); }, [searchQuery, showInactives]);
 
   const loadData = async () => {
     setLoading(true);
     const rawData = await getAllDestinatarios();
-    
-    // ORDENAMIENTO DE DATOS AL DESCARGAR
     const sortedData = (rawData || []).sort((a, b) => {
-        // 1. Condición de "Completitud": Si uno está vacío y el otro no, el vacío va al final
         const aIsEmpty = !a.codigo_destinatario || !a.nombre_destinatario;
         const bIsEmpty = !b.codigo_destinatario || !b.nombre_destinatario;
-        
-        if (aIsEmpty && !bIsEmpty) return 1;  // A va al fondo
-        if (!aIsEmpty && bIsEmpty) return -1; // B va al fondo
-        
-        // 2. Condición Alfabética (A-Z) para los que están en la misma categoría
+        if (aIsEmpty && !bIsEmpty) return 1;
+        if (!aIsEmpty && bIsEmpty) return -1;
         const nameA = (a.nombre_destinatario || '').toLowerCase();
         const nameB = (b.nombre_destinatario || '').toLowerCase();
         return nameA.localeCompare(nameB, 'es');
     });
-
     setClientes(sortedData);
     setLoading(false);
   };
@@ -165,7 +156,6 @@ function ClientesManager() {
     }
   };
 
-  // BUSCADOR GLOBAL: Se filtra primero TODA la base de datos descargada
   const filteredClientes = clientes.filter(c => {
     const term = searchQuery.toLowerCase();
     const matchesSearch = 
@@ -176,7 +166,6 @@ function ClientesManager() {
     return matchesSearch && matchesStatus;
   });
 
-  // PAGINACIÓN: Se aplica SOLAMENTE a los resultados ya filtrados
   const totalPages = Math.ceil(filteredClientes.length / ITEMS_PER_PAGE) || 1;
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedClientes = filteredClientes.slice(startIndex, startIndex + ITEMS_PER_PAGE);
@@ -344,24 +333,28 @@ function ClientesManager() {
   );
 }
 
-// --- SUB-COMPONENTE: GESTIÓN DE MAPEO SAP (MODIFICADO PARA INTEGRAR MOTIVOS) ---
+// --- SUB-COMPONENTE: GESTIÓN DE MAPEO SAP (MODAL EN DOS PASOS) ---
 function SapAccountManager() {
   const [mappings, setMappings] = useState([]);
-  const [motivos, setMotivos] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showInactives, setShowInactives] = useState(false);
+  
+  // Estados para el Modal de Dos Pasos
+  const [step, setStep] = useState(1);
+  const [isProcessingMotivo, setIsProcessingMotivo] = useState(false);
+  const tiposGasto = ['General', 'Falso Flete', 'Gasto Adicional', 'Último Punto', 'Zona rígida', 'Maniobras', 'Carga < al % mínimo'];
+
   const [formData, setFormData] = useState({ 
     id: null, 
     motivo_id: '', 
-    nuevo_motivo_nombre: '', 
+    motivo_nombre: '', 
+    tipo_gasto: 'General', 
     tipo_posicion: '', 
     clase_condicion: '', 
     cuenta_contable: '' 
   });
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showInactives, setShowInactives] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     const data = await getSapMappings();
@@ -371,18 +364,44 @@ function SapAccountManager() {
       return nombreA.localeCompare(nombreB, 'es');
     });
     setMappings(sortedData);
-    const { data: motivosData } = await supabase.from('maestro_motivos').select('id, nombre').eq('activo', true).order('nombre');
-    setMotivos(motivosData || []);
   };
 
-  const handleSave = async () => {
-    // Validación actualizada para permitir motivos existentes O motivos nuevos
-    if (!formData.tipo_posicion || (!formData.motivo_id && formData.motivo_id !== 'NEW') || (formData.motivo_id === 'NEW' && !formData.nuevo_motivo_nombre)) {
-      return toast.error("El motivo y la posición son obligatorios");
+  // ACCIÓN DE PASO 1: Procesar Motivo y avanzar
+  const handleNextStep = async () => {
+    if (!formData.motivo_nombre.trim()) return toast.error("Ingresa el nombre del motivo");
+    
+    setIsProcessingMotivo(true);
+    try {
+       // Habla con la base de datos para crear o recuperar el motivo
+       const result = await createOrGetMotivo(formData.motivo_nombre.trim(), formData.tipo_gasto);
+       setFormData({
+           ...formData, 
+           motivo_id: result.id, 
+           motivo_nombre: result.nombre 
+       });
+       setStep(2); // Avanzamos a configuración SAP
+    } catch(error) {
+       toast.error("Error al procesar el motivo");
+    } finally {
+       setIsProcessingMotivo(false);
     }
+  };
+
+  // ACCIÓN DE CANCELAR: Con Sistema de Limpieza (Rollback)
+  const handleCancel = async () => {
+    // Si estamos creando un MAPEO NUEVO, estamos en el PASO 2, y ya se creó un Motivo...
+    if (!formData.id && step === 2 && formData.motivo_id) {
+       await rollbackMotivo(formData.motivo_id); // Eliminamos el motivo huérfano en silencio
+    }
+    setIsModalOpen(false);
+  };
+
+  // ACCIÓN FINAL: Guardar Configuración SAP
+  const handleSave = async () => {
+    if (!formData.tipo_posicion) return toast.error("La posición SAP es obligatoria");
     try {
       await saveSapMapping(formData);
-      toast.success(formData.id ? "Mapeo actualizado" : "Mapeo y motivo guardados");
+      toast.success(formData.id ? "Mapeo actualizado" : "Configuración SAP guardada exitosamente");
       setIsModalOpen(false);
       loadData();
     } catch (error) {
@@ -391,15 +410,18 @@ function SapAccountManager() {
   };
 
   const openNew = () => {
-    setFormData({ id: null, motivo_id: '', nuevo_motivo_nombre: '', tipo_posicion: '', clase_condicion: '', cuenta_contable: '' });
+    setStep(1);
+    setFormData({ id: null, motivo_id: '', motivo_nombre: '', tipo_gasto: 'General', tipo_posicion: '', clase_condicion: '', cuenta_contable: '' });
     setIsModalOpen(true);
   };
 
   const openEdit = (item) => {
+    setStep(2); // La edición va directo al paso 2
     setFormData({ 
       id: item.id, 
       motivo_id: item.motivo_id, 
-      nuevo_motivo_nombre: '',
+      motivo_nombre: item.motivo?.nombre || 'Desconocido',
+      tipo_gasto: '', 
       tipo_posicion: item.tipo_posicion || '', 
       clase_condicion: item.clase_condicion || '', 
       cuenta_contable: item.cuenta_contable || '' 
@@ -486,55 +508,83 @@ function SapAccountManager() {
         </table>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={formData.id ? "Editar Mapeo SAP" : "Nuevo Mapeo SAP"}>
-        <div className="space-y-4 pt-4">
-          <div>
-            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Motivo de Gasto a Mapear</label>
-            <select 
-              className="w-full h-10 rounded-md border border-gray-300 dark:border-slate-700 px-3 text-sm font-bold bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500"
-              value={formData.motivo_id}
-              onChange={e => setFormData({...formData, motivo_id: e.target.value})}
-            >
-              <option value="">Seleccionar motivo...</option>
-              {motivos.map(mot => (
-                <option key={mot.id} value={mot.id}>{mot.nombre}</option>
-              ))}
-              <option value="NEW" className="font-bold text-brand-600 dark:text-brand-400">+ Crear nuevo motivo...</option>
-            </select>
-            
-            {/* Campo dinámico si selecciona "Crear nuevo motivo" */}
-            {formData.motivo_id === 'NEW' && (
-              <div className="mt-3 p-3 bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50 rounded-lg animate-in fade-in slide-in-from-top-2">
-                  <label className="block text-xs font-bold text-brand-700 dark:text-brand-400 uppercase mb-1">Nombre del Nuevo Motivo</label>
-                  <Input 
-                    placeholder="Ej. Peajes extra, Carga especial..." 
-                    value={formData.nuevo_motivo_nombre} 
-                    onChange={e => setFormData({...formData, nuevo_motivo_nombre: e.target.value})} 
-                  />
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Posición (Ej. ZU51)</label>
-              <Input placeholder="ZU..." value={formData.tipo_posicion} onChange={e => setFormData({...formData, tipo_posicion: e.target.value.toUpperCase()})} />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Clase de Condición</label>
-              <Input placeholder="Ej. ZMA1" value={formData.clase_condicion} onChange={e => setFormData({...formData, clase_condicion: e.target.value.toUpperCase()})} />
-            </div>
-          </div>
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={handleCancel} 
+        title={formData.id ? "Editar Mapeo SAP" : (step === 1 ? "Paso 1: Identificar Motivo" : "Paso 2: Configuración SAP")}
+      >
+        <div className="pt-4">
           
-          <div>
-            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Tipo de Cuenta (Opcional)</label>
-            <Input placeholder="Ej. K" value={formData.cuenta_contable} onChange={e => setFormData({...formData, cuenta_contable: e.target.value.toUpperCase()})} />
-          </div>
+          {/* ================= PASO 1: EL MOTIVO ================= */}
+          {step === 1 && !formData.id && (
+            <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/30">
+                  <p className="text-xs text-blue-700 dark:text-blue-300">Ingresa el nombre del motivo de gasto. Si ya existe en la base de datos, el sistema lo reconocerá automáticamente.</p>
+              </div>
 
-          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100 dark:border-slate-700">
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>{formData.id ? "Guardar Cambios" : "Guardar Mapeo"}</Button>
-          </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nombre del Motivo</label>
+                <Input 
+                  placeholder="Ej. Peajes extra, Carga especial..." 
+                  value={formData.motivo_nombre} 
+                  onChange={e => setFormData({...formData, motivo_nombre: e.target.value})} 
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Tipo de Gasto asociado</label>
+                <select 
+                  className="w-full h-10 rounded-md border border-gray-300 dark:border-slate-700 px-3 text-sm font-medium bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500"
+                  value={formData.tipo_gasto}
+                  onChange={e => setFormData({...formData, tipo_gasto: e.target.value})}
+                >
+                  {tiposGasto.map(tipo => (
+                    <option key={tipo} value={tipo}>{tipo}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100 dark:border-slate-700">
+                <Button variant="outline" onClick={handleCancel}>Cancelar</Button>
+                <Button onClick={handleNextStep} isLoading={isProcessingMotivo}>
+                   Siguiente <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ================= PASO 2: CONFIGURACIÓN SAP ================= */}
+          {step === 2 && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+              
+              <div className="p-3 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-100 dark:border-brand-800/30">
+                 <p className="text-[10px] font-bold uppercase text-brand-700 dark:text-brand-400 tracking-wider">Motivo Seleccionado</p>
+                 <p className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">{formData.motivo_nombre}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Posición (Ej. ZU51)</label>
+                  <Input placeholder="ZU..." value={formData.tipo_posicion} onChange={e => setFormData({...formData, tipo_posicion: e.target.value.toUpperCase()})} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Clase de Condición</label>
+                  <Input placeholder="Ej. ZMA1" value={formData.clase_condicion} onChange={e => setFormData({...formData, clase_condicion: e.target.value.toUpperCase()})} />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Tipo de Cuenta (Opcional)</label>
+                <Input placeholder="Ej. 5902401000" value={formData.cuenta_contable} onChange={e => setFormData({...formData, cuenta_contable: e.target.value.toUpperCase()})} />
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100 dark:border-slate-700">
+                <Button variant="outline" onClick={handleCancel}>Cancelar</Button>
+                <Button onClick={handleSave}>{formData.id ? "Guardar Cambios" : "Guardar Mapeo SAP"}</Button>
+              </div>
+            </div>
+          )}
+
         </div>
       </Modal>
     </div>
@@ -1194,59 +1244,6 @@ function AreasManager() {
                       {item.activo ? "ACTIVO" : "INACTIVO"}
                   </button>
               </div>
-          </div>
-          ))}
-          {filteredItems.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No hay registros.</p>}
-      </div>
-    </div>
-  );
-}
-
-// --- SUB-COMPONENTE: MAESTROS SIMPLES ---
-function SimpleMasterManager({ table, title }) {
-  const [items, setItems] = useState([]);
-  const [text, setText] = useState('');
-  const [showInactives, setShowInactives] = useState(false);
-
-  useEffect(() => { loadItems(); }, [table]);
-  const loadItems = async () => {
-    const { data } = await supabase.from(table).select('*').order('nombre', { ascending: true });
-    setItems(data || []);
-  };
-  const addItem = async () => {
-    if (!text) return;
-    const { error } = await supabase.from(table).insert([{ nombre: text, activo: true }]);
-    if (error) toast.error("Error"); else { toast.success("Agregado"); setText(''); loadItems(); }
-  };
-  const toggleActive = async (id, currentStatus) => { await supabase.from(table).update({ activo: !currentStatus }).eq('id', id); loadItems(); };
-  
-  const filteredItems = items.filter(i => showInactives ? !i.activo : i.activo);
-
-  return (
-    <div className="max-w-xl">
-      <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-lg text-gray-900 dark:text-white">{title}</h3>
-          <Button 
-            variant={showInactives ? "default" : "outline"} 
-            size="sm"
-            onClick={() => setShowInactives(!showInactives)} 
-            className={cn("gap-2", showInactives && "bg-gray-800 text-white hover:bg-gray-900")}
-          >
-            {showInactives ? <FilterX className="w-4 h-4" /> : <Filter className="w-4 h-4" />}
-            {showInactives ? "Ver Activos" : "Ver Inactivos"}
-          </Button>
-      </div>
-      <div className="flex gap-2 mb-6">
-        <Input placeholder="Nuevo item..." value={text} onChange={e => setText(e.target.value)} />
-        <Button onClick={addItem}><Plus className="w-4 h-4" /></Button>
-      </div>
-      <div className="space-y-2">
-          {filteredItems.map(item => (
-          <div key={item.id} className={cn("flex items-center justify-between p-3 rounded-lg border", item.activo ? "bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700" : "bg-gray-50 dark:bg-slate-900/20 border-gray-100 dark:border-slate-700 border-dashed opacity-70")}>
-              <span className={cn("font-medium", item.activo ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400 line-through")}>{item.nombre}</span>
-              <button onClick={() => toggleActive(item.id, item.activo)} className={cn("text-xs font-bold px-2 py-1 rounded transition-colors", item.activo ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-green-100 dark:hover:bg-green-900/30 hover:text-green-700")}>
-                  {item.activo ? "ACTIVO" : "INACTIVO"}
-              </button>
           </div>
           ))}
           {filteredItems.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No hay registros.</p>}
