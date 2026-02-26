@@ -100,7 +100,7 @@ export default function Login() {
 
           <div className="mt-8 text-center">
             <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest font-bold">
-              © 2026 Softys. Anderson Cabanillas.
+              &copy; Copyright {new Date().getFullYear()} Todos los derechos reservados a Anderson Cabanillas.
             </p>
           </div>
         </div>
