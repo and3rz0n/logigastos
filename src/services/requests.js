@@ -126,15 +126,59 @@ export const getSapMappings = async () => {
   }
 };
 
+// MEJORA: Función inteligente de guardado (Doble Inserción si es necesario)
 export const saveSapMapping = async (payload) => {
   try {
+    let finalMotivoId = payload.motivo_id;
+
+    // 1. Verificar si el usuario pidió crear un NUEVO motivo
+    if (payload.motivo_id === 'NEW' && payload.nuevo_motivo_nombre) {
+      const { data: newMotivo, error: motivoError } = await supabase
+        .from('maestro_motivos')
+        .insert([{ nombre: payload.nuevo_motivo_nombre, activo: true }])
+        .select('id')
+        .single();
+        
+      if (motivoError) throw motivoError;
+      finalMotivoId = newMotivo.id; // Asignamos el nuevo ID generado por la BD
+    }
+
+    // 2. Preparamos el paquete de datos para SAP
+    const mappingData = {
+      motivo_id: finalMotivoId,
+      tipo_posicion: payload.tipo_posicion,
+      clase_condicion: payload.clase_condicion,
+      cuenta_contable: payload.cuenta_contable
+    };
+
+    // 3. Guardar o Actualizar el Mapeo
     if (payload.id) {
-      const { error } = await supabase.from('configuracion_cuentas').update(payload).eq('id', payload.id);
+      const { error } = await supabase
+        .from('configuracion_cuentas')
+        .update(mappingData)
+        .eq('id', payload.id);
       if (error) throw error;
     } else {
-      const { error } = await supabase.from('configuracion_cuentas').insert([payload]);
+      mappingData.activo = true; // Todo mapeo nuevo nace ACTIVO
+      const { error } = await supabase
+        .from('configuracion_cuentas')
+        .insert([mappingData]);
       if (error) throw error;
     }
+    return { success: true };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// NUEVA FUNCIÓN: Encendido y apagado de Mapeos SAP
+export const toggleSapMappingStatus = async (id, currentStatus) => {
+  try {
+    const { error } = await supabase
+      .from('configuracion_cuentas')
+      .update({ activo: !currentStatus })
+      .eq('id', id);
+    if (error) throw error;
     return { success: true };
   } catch (error) {
     throw error;
@@ -261,7 +305,6 @@ export const createRequest = async (data) => {
     const motivoReal = data.motivo_gasto || data.sustento_texto || "";
 
     if (motivoReal) {
-      // Filtramos obligatoriamente por activo=true para evitar choques con el histórico
       const { data: motivoData } = await supabase
         .from('maestro_motivos')
         .select('id')
@@ -321,13 +364,11 @@ export const createRequest = async (data) => {
 };
 
 // --- LECTURA DE SOLICITUDES DESDE LA VISTA ---
-
 export const getMyRequests = async (userProfile, page = 1, searchTerm = "", statusFilter = "all") => {
   try {
     const from = (page - 1) * 10;
     const to = from + 9;
     
-    // MEJORA: El pagador ahora tiene acceso global igual que admin/dev
     const isSupervisor = ['admin', 'developer', 'usuario_pagador'].includes(userProfile.rol);
 
     let query = supabase
@@ -448,7 +489,6 @@ export const getPaidHistory = async (page = 1, searchTerm = "", dateFrom = "", d
 };
 
 // --- ACCIONES DE ESCRITURA ---
-
 export const updateRequestStatus = async (requestId, newStatus, currentUserId, rejectionReason = null, asuntoCorreo = null) => {
   try {
     const updateData = { 
@@ -512,7 +552,6 @@ export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm 
     if (filters.tipo_gasto && filters.tipo_gasto !== 'all') query = query.eq('tipo_gasto', filters.tipo_gasto);
     if (filters.motivo && filters.motivo !== 'all') query = query.eq('motivo', filters.motivo);
     
-    // TRADUCCIÓN INTELIGENTE DE ESTADO: Mapea Aprobado/Rechazado a los valores booleanos/texto de la DB
     if (filters.estado && filters.estado !== 'all') {
       if (filters.estado === 'aprobado') {
         query = query.or('validacion_analista.eq.VERDADERO,validacion_analista.eq.true');
@@ -525,14 +564,12 @@ export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm 
     if (filters.clase_de_condicion && filters.clase_de_condicion !== 'all') query = query.eq('clase_de_condicion', filters.clase_de_condicion);
     if (filters.tipo_de_cuenta && filters.tipo_de_cuenta !== 'all') query = query.eq('tipo_de_cuenta', filters.tipo_de_cuenta);
     
-    // MEJORA: Rangos de Fecha de Registro
     if (filters.fechaInicioReg && filters.fechaFinReg) {
       query = query
         .gte('fe_registro', `${filters.fechaInicioReg}T00:00:00-05:00`)
         .lte('fe_registro', `${filters.fechaFinReg}T23:59:59-05:00`);
     }
 
-    // MEJORA: Rangos de Fecha de Factura
     if (filters.fechaInicioFac && filters.fechaFinFac) {
       query = query
         .gte('fe_factura', filters.fechaInicioFac)
@@ -600,7 +637,6 @@ export const getAllGeneralHistoryDataFiltered = async (searchTerm = "", filters 
   }
 };
 
-// MEJORA: Extracción automática de filtros limpios en JavaScript para evitar el Error 400
 export const getGeneralHistoryUniqueFilters = async () => {
   try {
     const [p, c, a, t] = await Promise.all([
