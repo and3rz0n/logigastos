@@ -133,7 +133,6 @@ export const getSapMappings = async () => {
 // PASO 1: Crea el motivo o recupera su ID si ya existía
 export const createOrGetMotivo = async (nombre, tipo_gasto) => {
   try {
-    // 1. Buscamos si ya existe el motivo (ignorando mayúsculas/minúsculas)
     const { data: existing, error: searchError } = await supabase
       .from('maestro_motivos')
       .select('id, nombre')
@@ -144,12 +143,10 @@ export const createOrGetMotivo = async (nombre, tipo_gasto) => {
 
     if (searchError) throw searchError;
 
-    // Si existe, lo devolvemos
     if (existing) {
       return { id: existing.id, nombre: existing.nombre };
     }
 
-    // 2. Si no existe, lo creamos
     const { data: newMotivo, error: insertError } = await supabase
       .from('maestro_motivos')
       .insert([{ nombre: nombre, tipo_gasto: tipo_gasto, activo: true }])
@@ -317,17 +314,24 @@ export const getApprovers = async () => {
   }
 };
 
-// --- ESCRITURA Y VALIDACIÓN ---
-export const checkDuplicateRequest = async (transportistaId, picking, tipoGasto, motivoGasto) => {
+// --- ESCRITURA Y VALIDACIÓN (MODIFICADO PARA INCLUIR CLIENTE) ---
+export const checkDuplicateRequest = async (transportistaId, picking, tipoGasto, motivoGasto, destinatarioId) => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('solicitudes_gastos')
       .select('id')
       .eq('transportista_id', transportistaId)
       .eq('nro_transporte_sap', picking)
       .eq('tipo_gasto', tipoGasto)
-      .eq('motivo_gasto', motivoGasto)
-      .limit(1); 
+      .eq('motivo_gasto', motivoGasto);
+      
+    // Agregamos la condición del cliente si nos la envían
+    if (destinatarioId) {
+      query = query.eq('destinatario_id', destinatarioId);
+    }
+
+    const { data, error } = await query.limit(1);
+    
     if (error) throw error;
     return data && data.length > 0; 
   } catch (error) {
