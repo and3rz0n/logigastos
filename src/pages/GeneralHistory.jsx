@@ -164,7 +164,7 @@ export default function GeneralHistory() {
       </div>
 
       <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-8">
-        {/* BUSCADOR - OCUPA TODO EL ANCHO */}
+        
         <div className="relative">
           <Search className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
           <Input
@@ -178,7 +178,7 @@ export default function GeneralHistory() {
           />
         </div>
 
-        {/* FILA 1: CATEGORÍAS GENERALES (4 Columnas en Desktop) */}
+        {/* FILA 1: Filtros de Selección Simple */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <FilterSelect 
             label="Tipo Gasto" 
@@ -215,55 +215,59 @@ export default function GeneralHistory() {
           <FilterSelect label="Posición" value={filters.posicion} options={["all", ...sapFilters.posiciones]} onChange={(v) => {setFilters({...filters, posicion: v}); setCurrentPage(1);}} />
         </div>
 
-        {/* FILA 2: FECHAS Y SAP TÉCNICO (Grid de 12 para control total) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end pt-6 border-t border-gray-50 dark:border-slate-700/50">
+        {/* FILA 2: CONTENEDOR FLEXIBLE (Evita sobreposición de fechas y menús) */}
+        <div className="flex flex-wrap gap-6 pt-6 border-t border-gray-50 dark:border-slate-700/50">
           
-          {/* GRUPO FECHA REGISTRO - OCUPA 4/12 */}
-          <div className="lg:col-span-4 space-y-2">
+          {/* Rango Fecha Registro */}
+          <div className="w-full md:w-auto flex-1 min-w-[280px] space-y-2">
             <label className="text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase ml-1">Rango Fecha de Registro</label>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex gap-2">
               <Input 
                 type="date" 
-                className="h-10 text-xs dark:text-white flex-1"
+                className="h-11 text-sm dark:text-white flex-1 min-w-[130px]"
                 value={filters.fechaInicioReg}
                 onChange={(e) => {setFilters({...filters, fechaInicioReg: e.target.value}); setCurrentPage(1);}}
               />
               <Input 
                 type="date" 
-                className="h-10 text-xs dark:text-white flex-1"
+                className="h-11 text-sm dark:text-white flex-1 min-w-[130px]"
                 value={filters.fechaFinReg}
                 onChange={(e) => {setFilters({...filters, fechaFinReg: e.target.value}); setCurrentPage(1);}}
               />
             </div>
           </div>
 
-          {/* GRUPO FECHA FACTURA - OCUPA 4/12 */}
-          <div className="lg:col-span-4 space-y-2">
+          {/* Rango Fecha Factura */}
+          <div className="w-full md:w-auto flex-1 min-w-[280px] space-y-2">
             <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase ml-1">Rango Fecha de Factura</label>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex gap-2">
               <Input 
                 type="date" 
-                className="h-10 text-xs dark:text-white flex-1"
+                className="h-11 text-sm dark:text-white flex-1 min-w-[130px]"
                 value={filters.fechaInicioFac}
                 onChange={(e) => {setFilters({...filters, fechaInicioFac: e.target.value}); setCurrentPage(1);}}
               />
               <Input 
                 type="date" 
-                className="h-10 text-xs dark:text-white flex-1"
+                className="h-11 text-sm dark:text-white flex-1 min-w-[130px]"
                 value={filters.fechaFinFac}
                 onChange={(e) => {setFilters({...filters, fechaFinFac: e.target.value}); setCurrentPage(1);}}
               />
             </div>
           </div>
 
-          {/* FILTROS SAP TÉCNICOS - OCUPAN 4/12 */}
-          <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FilterSelect label="Condición" value={filters.clase_de_condicion} options={["all", ...sapFilters.condiciones]} onChange={(v) => {setFilters({...filters, clase_de_condicion: v}); setCurrentPage(1);}} />
-            <FilterSelect label="Cuenta" value={filters.tipo_de_cuenta} options={["all", ...sapFilters.cuentas]} onChange={(v) => {setFilters({...filters, tipo_de_cuenta: v}); setCurrentPage(1);}} />
+          {/* Filtros de SAP */}
+          <div className="w-full md:w-auto flex-1 min-w-[280px] flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <FilterSelect label="Condición" value={filters.clase_de_condicion} options={["all", ...sapFilters.condiciones]} onChange={(v) => {setFilters({...filters, clase_de_condicion: v}); setCurrentPage(1);}} />
+            </div>
+            <div className="flex-1">
+              <FilterSelect label="Cuenta" value={filters.tipo_de_cuenta} options={["all", ...sapFilters.cuentas]} onChange={(v) => {setFilters({...filters, tipo_de_cuenta: v}); setCurrentPage(1);}} />
+            </div>
           </div>
         </div>
         
-        {/* BOTÓN LIMPIAR DINÁMICO */}
+        {/* Botón Limpiar */}
         {(filters.fechaInicioReg || filters.fechaFinReg || filters.fechaInicioFac || filters.fechaFinFac) && (
             <div className="flex justify-end pt-2">
                 <button 
@@ -271,7 +275,7 @@ export default function GeneralHistory() {
                       setFilters({...filters, fechaInicioReg: "", fechaFinReg: "", fechaInicioFac: "", fechaFinFac: ""});
                       setCurrentPage(1);
                   }}
-                  className="text-[10px] font-bold text-red-500 hover:text-red-600 dark:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1"
+                  className="text-[10px] font-bold text-red-500 hover:text-red-600 dark:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-100 dark:border-red-900/50"
                 >
                   <X className="w-3 h-3" /> Limpiar rangos de fecha
                 </button>
@@ -279,6 +283,7 @@ export default function GeneralHistory() {
         )}
       </div>
 
+      {/* Tabla (Sin cambios) */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left border-collapse table-auto">
@@ -455,5 +460,4 @@ function BadgeFF({ status }) {
   ); 
 }
 
-// ICONO X PARA LIMPIAR
 function X(props) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>; }
