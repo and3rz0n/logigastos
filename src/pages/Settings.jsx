@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { 
   getSystemConfig, updateSystemConfig, getAllVehicles, saveVehicle, 
-  getSapMappings, saveSapMapping, updateZonaPorcentaje,
+  getSapMappings, saveSapMapping, toggleSapMappingStatus, updateZonaPorcentaje,
   getAllDestinatarios, saveDestinatario, toggleDestinatarioStatus
 } from '../services/requests';
 import { Button } from '../components/ui/Button';
@@ -44,14 +44,13 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* Menú de Pestañas Mejorado */}
+      {/* Menú de Pestañas Mejorado (Se eliminó "Motivos Gasto" para centralizarlo en Cuentas SAP) */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-700 pb-1">
         <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={Users} label="Usuarios" />
         <TabButton active={activeTab === 'clientes'} onClick={() => setActiveTab('clientes')} icon={Building2} label="Clientes" />
         <TabButton active={activeTab === 'vehiculos'} onClick={() => setActiveTab('vehiculos')} icon={Car} label="Flota" />
         <TabButton active={activeTab === 'areas'} onClick={() => setActiveTab('areas')} icon={Briefcase} label="Áreas (CeCo)" />
         <TabButton active={activeTab === 'sap'} onClick={() => setActiveTab('sap')} icon={DollarSign} label="Cuentas SAP" />
-        <TabButton active={activeTab === 'motivos'} onClick={() => setActiveTab('motivos')} icon={Tag} label="Motivos Gasto" />
         <TabButton active={activeTab === 'operaciones'} onClick={() => setActiveTab('operaciones')} icon={Truck} label="Operaciones" />
         <TabButton active={activeTab === 'zonas'} onClick={() => setActiveTab('zonas')} icon={Map} label="Zonas y Canales" />
         <TabButton active={activeTab === 'sistema'} onClick={() => setActiveTab('sistema')} icon={Settings2} label="Ajustes de Sistema" />
@@ -63,7 +62,6 @@ export default function Settings() {
         {activeTab === 'vehiculos' && <VehiclesManager />}
         {activeTab === 'areas' && <AreasManager />}
         {activeTab === 'sap' && <SapAccountManager />}
-        {activeTab === 'motivos' && <SimpleMasterManager table="maestro_motivos" title="Motivos Generales de Gasto" />}
         {activeTab === 'zonas' && <ZonasManager />}
         {activeTab === 'operaciones' && <AdvancedMasterManager />}
         {activeTab === 'sistema' && <SystemManager />}
@@ -346,13 +344,20 @@ function ClientesManager() {
   );
 }
 
-// --- SUB-COMPONENTE: GESTIÓN DE MAPEO SAP ---
+// --- SUB-COMPONENTE: GESTIÓN DE MAPEO SAP (MODIFICADO PARA INTEGRAR MOTIVOS) ---
 function SapAccountManager() {
   const [mappings, setMappings] = useState([]);
   const [motivos, setMotivos] = useState([]);
-  const [formData, setFormData] = useState({ id: null, motivo_id: '', tipo_posicion: '', clase_condicion: '', cuenta_contable: '' });
+  const [formData, setFormData] = useState({ 
+    id: null, 
+    motivo_id: '', 
+    nuevo_motivo_nombre: '', 
+    tipo_posicion: '', 
+    clase_condicion: '', 
+    cuenta_contable: '' 
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showInactives, setShowInactives] = useState(false); // ESTADO PARA INACTIVOS
+  const [showInactives, setShowInactives] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -371,10 +376,13 @@ function SapAccountManager() {
   };
 
   const handleSave = async () => {
-    if (!formData.motivo_id || !formData.tipo_posicion) return toast.error("El motivo y la posición son obligatorios");
+    // Validación actualizada para permitir motivos existentes O motivos nuevos
+    if (!formData.tipo_posicion || (!formData.motivo_id && formData.motivo_id !== 'NEW') || (formData.motivo_id === 'NEW' && !formData.nuevo_motivo_nombre)) {
+      return toast.error("El motivo y la posición son obligatorios");
+    }
     try {
       await saveSapMapping(formData);
-      toast.success(formData.id ? "Mapeo actualizado" : "Mapeo creado");
+      toast.success(formData.id ? "Mapeo actualizado" : "Mapeo y motivo guardados");
       setIsModalOpen(false);
       loadData();
     } catch (error) {
@@ -383,7 +391,7 @@ function SapAccountManager() {
   };
 
   const openNew = () => {
-    setFormData({ id: null, motivo_id: '', tipo_posicion: '', clase_condicion: '', cuenta_contable: '' });
+    setFormData({ id: null, motivo_id: '', nuevo_motivo_nombre: '', tipo_posicion: '', clase_condicion: '', cuenta_contable: '' });
     setIsModalOpen(true);
   };
 
@@ -391,6 +399,7 @@ function SapAccountManager() {
     setFormData({ 
       id: item.id, 
       motivo_id: item.motivo_id, 
+      nuevo_motivo_nombre: '',
       tipo_posicion: item.tipo_posicion || '', 
       clase_condicion: item.clase_condicion || '', 
       cuenta_contable: item.cuenta_contable || '' 
@@ -399,11 +408,15 @@ function SapAccountManager() {
   };
 
   const toggleStatus = async (id, currentStatus) => {
-    await supabase.from('configuracion_cuentas').update({ activo: !currentStatus }).eq('id', id);
-    loadData();
+    try {
+      await toggleSapMappingStatus(id, currentStatus);
+      toast.success(currentStatus ? "Mapeo desactivado" : "Mapeo activado");
+      loadData();
+    } catch (error) {
+      toast.error("Error al cambiar el estado");
+    }
   };
 
-  // Filtrar según el estado de showInactives
   const filteredMappings = mappings.filter(m => showInactives ? !m.activo : m.activo);
 
   return (
@@ -486,7 +499,20 @@ function SapAccountManager() {
               {motivos.map(mot => (
                 <option key={mot.id} value={mot.id}>{mot.nombre}</option>
               ))}
+              <option value="NEW" className="font-bold text-brand-600 dark:text-brand-400">+ Crear nuevo motivo...</option>
             </select>
+            
+            {/* Campo dinámico si selecciona "Crear nuevo motivo" */}
+            {formData.motivo_id === 'NEW' && (
+              <div className="mt-3 p-3 bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50 rounded-lg animate-in fade-in slide-in-from-top-2">
+                  <label className="block text-xs font-bold text-brand-700 dark:text-brand-400 uppercase mb-1">Nombre del Nuevo Motivo</label>
+                  <Input 
+                    placeholder="Ej. Peajes extra, Carga especial..." 
+                    value={formData.nuevo_motivo_nombre} 
+                    onChange={e => setFormData({...formData, nuevo_motivo_nombre: e.target.value})} 
+                  />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -507,7 +533,7 @@ function SapAccountManager() {
 
           <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100 dark:border-slate-700">
             <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>{formData.id ? "Guardar Cambios" : "Crear Mapeo"}</Button>
+            <Button onClick={handleSave}>{formData.id ? "Guardar Cambios" : "Guardar Mapeo"}</Button>
           </div>
         </div>
       </Modal>
@@ -701,7 +727,7 @@ function VehiclesManager() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   const [formData, setFormData] = useState({ placa: '', capacidad_m3: '', transportista_id: '', activo: true });
-  const [showInactives, setShowInactives] = useState(false); // ESTADO PARA INACTIVOS
+  const [showInactives, setShowInactives] = useState(false);
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { setCurrentPage(1); }, [searchQuery, showInactives]);
@@ -739,7 +765,6 @@ function VehiclesManager() {
     setIsModalOpen(true);
   };
 
-  // Filtrar por texto Y por estado
   const filteredVehicles = vehicles.filter(v => {
     const term = searchQuery.toLowerCase();
     const matchesSearch = v.placa?.toLowerCase().includes(term) || v.transportista?.nombre_completo?.toLowerCase().includes(term);
@@ -875,7 +900,7 @@ function UsersManager({ currentUser }) {
   const [showPassword, setShowPassword] = useState(false);
   const [resetPasswordMode, setResetPasswordMode] = useState(false);
   const [formData, setFormData] = useState({ dni: '', password: '', nombre: '', rol: 'operador_logistico', telefono: '', activo: true });
-  const [showInactives, setShowInactives] = useState(false); // ESTADO PARA INACTIVOS
+  const [showInactives, setShowInactives] = useState(false);
 
   useEffect(() => { fetchUsers(); }, []);
   const getRoleWeight = (rol) => {
@@ -1106,7 +1131,7 @@ function AreasManager() {
   const [items, setItems] = useState([]);
   const [formData, setFormData] = useState({ nombre: '', id_ceco: '' });
   const [editingId, setEditingId] = useState(null);
-  const [showInactives, setShowInactives] = useState(false); // ESTADO PARA INACTIVOS
+  const [showInactives, setShowInactives] = useState(false);
 
   useEffect(() => { loadItems(); }, []);
   const loadItems = async () => {
@@ -1181,7 +1206,7 @@ function AreasManager() {
 function SimpleMasterManager({ table, title }) {
   const [items, setItems] = useState([]);
   const [text, setText] = useState('');
-  const [showInactives, setShowInactives] = useState(false); // ESTADO PARA INACTIVOS
+  const [showInactives, setShowInactives] = useState(false);
 
   useEffect(() => { loadItems(); }, [table]);
   const loadItems = async () => {
@@ -1235,7 +1260,7 @@ function AdvancedMasterManager() {
   const [category, setCategory] = useState('ruta_ff');
   const [items, setItems] = useState([]);
   const [formData, setFormData] = useState({ etiqueta: '', orden: 0 });
-  const [showInactives, setShowInactives] = useState(false); // ESTADO PARA INACTIVOS
+  const [showInactives, setShowInactives] = useState(false);
 
   useEffect(() => { loadItems(); }, [category]);
   const loadItems = async () => {
