@@ -28,12 +28,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    let isMounted = true; // Seguro para evitar fugas de memoria al recargar rápido
+    let isMounted = true; // Seguro para evitar fugas de memoria
 
     const initializeSession = async () => {
       try {
         setLoading(true);
-        // 1. Buscamos la sesión activa UNA ÚNICA VEZ al arrancar la app
+        // 1. Buscamos la sesión activa UNA ÚNICA VEZ al arrancar
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) throw error;
@@ -44,9 +44,9 @@ export const AuthProvider = ({ children }) => {
           
           if (isMounted) {
             if (userProfile) {
-              setProfile(userProfile); // Todo en orden, guardamos el perfil
+              setProfile(userProfile); // Todo en orden, guardamos
             } else {
-              // Si hay sesión pero no hay perfil, matamos la sesión corrupta
+              // Si hay sesión pero no perfil, limpiamos
               await supabase.auth.signOut();
               setUser(null);
               setProfile(null);
@@ -56,21 +56,22 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         console.error("❌ Error inicializando sesión:", error);
       } finally {
-        // SALIDA DE EMERGENCIA: Pase lo que pase, liberamos la pantalla de carga
+        // SALIDA DE EMERGENCIA DE ARRANQUE
         if (isMounted) setLoading(false);
       }
     };
 
-    // Ejecutamos el motor de arranque
     initializeSession();
 
-    // 2. El Vigilante: Solo escucha eventos NUEVOS (Logins o Logouts manuales)
+    // 2. El Vigilante: Solo escucha eventos NUEVOS
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Clave de la solución: Ignoramos el evento de arranque automático de Supabase
-      // porque ya lo hicimos nosotros mismos de forma controlada arriba.
+      // Ignoramos el evento de arranque automático
       if (event === 'INITIAL_SESSION') return;
 
       try {
+        // Activamos carga para procesar el nuevo login/logout
+        if (isMounted) setLoading(true);
+
         if (event === 'SIGNED_OUT') {
           if (isMounted) {
             setUser(null);
@@ -91,11 +92,14 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         console.error("❌ Error al procesar cambio de estado:", error);
+      } finally {
+        // EL INTERRUPTOR FALTANTE: Apagamos la carga tras un Login exitoso
+        if (isMounted) setLoading(false);
       }
     });
 
     return () => {
-      isMounted = false; // Desactivamos las actualizaciones si el componente se destruye
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -110,7 +114,12 @@ export const AuthProvider = ({ children }) => {
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Solo apagamos aquí si hay error (ej. mala contraseña)
+        // Si hay éxito, el vigilante (onAuthStateChange) se encargará de apagarlo
+        setLoading(false);
+        throw error;
+      }
       return data;
     } catch (error) {
       setLoading(false); 
@@ -123,7 +132,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       await supabase.auth.signOut();
       
-      // Limpieza total inmediata para evitar "fantasmas"
       setUser(null);
       setProfile(null);
       localStorage.clear(); 
@@ -131,7 +139,6 @@ export const AuthProvider = ({ children }) => {
       console.error("Error al salir:", error);
     } finally {
       setLoading(false);
-      // Forzamos recarga para asegurar limpieza de memoria del navegador
       window.location.href = '/login';
     }
   };
