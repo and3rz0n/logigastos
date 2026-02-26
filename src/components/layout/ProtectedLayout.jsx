@@ -5,11 +5,11 @@ import { useState } from 'react';
 import { Menu } from 'lucide-react';
 
 export const ProtectedLayout = () => {
-  const { user, profile, loading } = useAuth(); // Ahora escuchamos también a 'profile'
+  const { user, profile, loading } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // REGLA DE ORO: Si está cargando o tenemos usuario pero aún no su perfil, mantenemos la carga.
-  if (loading || (user && !profile)) {
+  // 1. Mostrar pantalla de carga SOLO si el contexto sigue trabajando
+  if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-brand-700">
         <div className="w-10 h-10 border-4 border-brand-700 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -18,19 +18,19 @@ export const ProtectedLayout = () => {
     );
   }
   
-  // Si definitivamente no hay usuario después de cargar, al login.
-  if (!user) return <Navigate to="/login" replace />;
+  // 2. Si ya NO está cargando, y falta el usuario O el perfil, echamos al usuario por seguridad
+  if (!user || !profile) {
+    return <Navigate to="/login" replace />;
+  }
 
+  // 3. Renderizado normal y seguro
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden text-slate-900 dark:text-white">
       
-      {/* Sidebar - Ahora garantizamos que recibe el perfil correcto desde el inicio */}
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-      {/* Contenido Principal */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
-        {/* --- MOBILE HEADER --- */}
         <div className="md:hidden flex items-center bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-4 py-3 gap-3 shadow-sm shrink-0">
           <button 
             onClick={() => setIsSidebarOpen(true)} 
@@ -49,10 +49,8 @@ export const ProtectedLayout = () => {
           </div>
         </div>
 
-        {/* Área de Página (Scrollable) */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50 dark:bg-slate-900/50">
           <div className="max-w-7xl mx-auto">
-            {/* Renderiza la página solicitada solo cuando el perfil es seguro */}
             <Outlet />
           </div>
         </main>
