@@ -307,17 +307,20 @@ export default function NewRequest() {
       }
 
       const motivoFinal = data.motivo_gasto || data.sustento || "";
+      
+      // AHORA PASAMOS 5 PARÁMETROS, INCLUYENDO EL CLIENTE
       const isDuplicate = await checkDuplicateRequest(
         user.id,
         data.nro_transporte,
         data.tipo_gasto,
         motivoFinal,
+        destinatarioId 
       );
 
       if (isDuplicate) {
         toast.error("Gasto Duplicado", {
           description:
-            "Ya existe una solicitud registrada con este Picking, Tipo de Gasto y Motivo.",
+            "Ya existe un gasto registrado para este Picking, Cliente y Motivo.",
         });
         return;
       }
