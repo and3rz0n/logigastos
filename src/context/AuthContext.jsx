@@ -10,8 +10,9 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Función para descargar el perfil con manejo de errores
+  // Función para descargar el perfil
   const fetchProfile = async (userId) => {
+    console.log(`[🔍 fetchProfile] Buscando perfil para el ID: ${userId}`);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -19,92 +20,126 @@ export const AuthProvider = ({ children }) => {
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("[❌ fetchProfile] Error de Supabase al traer perfil:", error.message);
+        throw error;
+      }
+      console.log(`[✅ fetchProfile] Perfil encontrado: ${data.nombre_completo} (Rol: ${data.rol})`);
       return data;
     } catch (err) {
-      console.warn("⚠️ Perfil no encontrado o error de red:", err.message);
+      console.warn("[⚠️ fetchProfile] Falla al obtener perfil:", err.message);
       return null;
     }
   };
 
   useEffect(() => {
-    let isMounted = true; // Seguro para evitar fugas de memoria
+    console.log("[🚀 AuthProvider] Montando componente / Iniciando motor");
+    let isMounted = true;
 
     const initializeSession = async () => {
+      console.log("[⚙️ initializeSession] Arrancando verificación de sesión inicial...");
       try {
         setLoading(true);
-        // 1. Buscamos la sesión activa UNA ÚNICA VEZ al arrancar
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (error) throw error;
+        if (error) {
+          console.error("[❌ initializeSession] Error obteniendo sesión:", error);
+          throw error;
+        }
 
         if (session?.user) {
+          console.log(`[🔓 initializeSession] Sesión en caché válida para: ${session.user.email}`);
           if (isMounted) setUser(session.user);
+          
           const userProfile = await fetchProfile(session.user.id);
           
           if (isMounted) {
             if (userProfile) {
-              setProfile(userProfile); // Todo en orden, guardamos
+              console.log("[💾 initializeSession] Guardando perfil en el estado de la app.");
+              setProfile(userProfile);
             } else {
-              // Si hay sesión pero no perfil, limpiamos
+              console.warn("[🗑️ initializeSession] Sesión activa pero SIN perfil. Cerrando sesión corrupta.");
               await supabase.auth.signOut();
               setUser(null);
               setProfile(null);
             }
           }
+        } else {
+          console.log("[🔒 initializeSession] No hay sesión activa en caché.");
         }
       } catch (error) {
         console.error("❌ Error inicializando sesión:", error);
       } finally {
-        // SALIDA DE EMERGENCIA DE ARRANQUE
-        if (isMounted) setLoading(false);
+        console.log(`[🏁 initializeSession] Bloque finally alcanzado. isMounted = ${isMounted}`);
+        if (isMounted) {
+            setLoading(false);
+            console.log("[🟢 initializeSession] Pantalla de carga APAGADA exitosamente.");
+        } else {
+            console.warn("[⚠️ initializeSession] isMounted es FALSE. El componente se desmontó, omitiendo apagado de pantalla.");
+        }
       }
     };
 
     initializeSession();
 
-    // 2. El Vigilante: Solo escucha eventos NUEVOS
+    // El Vigilante
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Ignoramos el evento de arranque automático
-      if (event === 'INITIAL_SESSION') return;
+      console.log(`[🔔 onAuthStateChange] Evento de Supabase detectado: ${event}`);
+      
+      if (event === 'INITIAL_SESSION') {
+         console.log("[⏭️ onAuthStateChange] Ignorando INITIAL_SESSION porque el motor ya lo procesó.");
+         return;
+      }
 
       try {
-        // Activamos carga para procesar el nuevo login/logout
-        if (isMounted) setLoading(true);
+        if (isMounted) {
+          setLoading(true);
+          console.log("[🟡 onAuthStateChange] Pantalla de carga ENCENDIDA por nuevo evento.");
+        }
 
         if (event === 'SIGNED_OUT') {
+          console.log("[👋 onAuthStateChange] Usuario cerró sesión. Vaciando datos.");
           if (isMounted) {
             setUser(null);
             setProfile(null);
           }
         } else if (session?.user) {
+          console.log(`[🔑 onAuthStateChange] Sesión autorizada para: ${session.user.email}`);
           if (isMounted) setUser(session.user);
+          
           const userProfile = await fetchProfile(session.user.id);
           
           if (isMounted) {
             if (userProfile) {
+              console.log("[💾 onAuthStateChange] Perfil inyectado en la app tras evento.");
               setProfile(userProfile);
             } else {
+              console.warn("[🗑️ onAuthStateChange] Sin perfil válido, limpiando accesos.");
               setUser(null);
               setProfile(null);
             }
           }
         }
       } catch (error) {
-        console.error("❌ Error al procesar cambio de estado:", error);
+        console.error("[❌ onAuthStateChange] Error crítico procesando evento:", error);
       } finally {
-        // EL INTERRUPTOR FALTANTE: Apagamos la carga tras un Login exitoso
-        if (isMounted) setLoading(false);
+        console.log(`[🏁 onAuthStateChange] Finalizando procesamiento de evento. isMounted = ${isMounted}`);
+        if (isMounted) {
+            setLoading(false);
+            console.log("[🟢 onAuthStateChange] Pantalla de carga APAGADA.");
+        }
       }
     });
 
     return () => {
+      console.log("[🛑 AuthProvider] Desmontando componente. Apagando suscripciones y bloqueando estados.");
       isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
   const signInWithDni = async (dni, password) => {
+    console.log(`[🔑 signInWithDni] Intentando login para DNI: ${dni}`);
     try {
       setLoading(true);
       const email = `${dni}@logigastos.app`;
@@ -115,11 +150,11 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (error) {
-        // Solo apagamos aquí si hay error (ej. mala contraseña)
-        // Si hay éxito, el vigilante (onAuthStateChange) se encargará de apagarlo
-        setLoading(false);
+        console.error("[❌ signInWithDni] Falló credencial en Supabase:", error.message);
         throw error;
       }
+      
+      console.log("[✅ signInWithDni] Login exitoso en backend.");
       return data;
     } catch (error) {
       setLoading(false); 
@@ -128,17 +163,21 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = async () => {
+    console.log("[🛑 signOut] Ejecutando orden de cierre de sesión manual...");
     try {
       setLoading(true);
       await supabase.auth.signOut();
+      console.log("[✅ signOut] Sesión destruida en Supabase.");
       
       setUser(null);
       setProfile(null);
       localStorage.clear(); 
+      console.log("[🧹 signOut] Limpieza agresiva de localStorage completada.");
     } catch (error) {
-      console.error("Error al salir:", error);
+      console.error("[❌ signOut] Error cerrando sesión:", error);
     } finally {
       setLoading(false);
+      console.log("[🔄 signOut] Expulsando al usuario a /login");
       window.location.href = '/login';
     }
   };
