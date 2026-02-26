@@ -8,12 +8,10 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
-  // Iniciamos cargando solo si hay token en local storage, para evitar parpadeos
   const [loading, setLoading] = useState(true);
 
-  // Función auxiliar para cargar el perfil sin bloquear la app
+  // AHORA: Esta función devuelve el perfil para poder esperarlo (await)
   const fetchProfile = async (userId) => {
-    console.log("🔄 Buscando perfil para ID:", userId);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -22,45 +20,42 @@ export const AuthProvider = ({ children }) => {
         .single();
 
       if (error) {
-        console.warn("⚠️ No se pudo cargar el perfil (posiblemente falta crearlo):", error.message);
-      } else {
-        console.log("✅ Perfil cargado:", data.nombre_completo);
-        setProfile(data);
+        console.warn("⚠️ Error cargando perfil:", error.message);
+        return null;
       }
+      return data;
     } catch (err) {
-      console.error("❌ Error crítico buscando perfil:", err);
+      console.error("❌ Error crítico perfil:", err);
+      return null;
     }
   };
 
   useEffect(() => {
-    console.log("🏁 Inicializando sistema de Auth...");
-
-    // 1. Obtener sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        console.log("🔓 Sesión recuperada:", session.user.email);
-        setUser(session.user);
-        // Cargamos el perfil en paralelo (sin await para no bloquear el render)
-        fetchProfile(session.user.id);
-      } else {
-        console.log("🔒 No hay sesión activa");
-      }
-      setLoading(false); // <--- LIBERAMOS LA APP INMEDIATAMENTE
-    });
-
-    // 2. Escuchar cambios en tiempo real
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("🔔 Cambio de estado Auth:", _event);
+    const initializeAuth = async () => {
+      setLoading(true);
+      
+      // 1. Verificar sesión actual
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
         setUser(session.user);
-        // Solo buscamos perfil si no lo tenemos ya
-        setProfile(prev => {
-          if (!prev) fetchProfile(session.user.id);
-          return prev;
-        });
+        const userProfile = await fetchProfile(session.user.id);
+        setProfile(userProfile);
+      }
+      
+      setLoading(false);
+    };
+
+    initializeAuth();
+
+    // 2. Escuchar cambios de estado (Login/Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        // Si el perfil está vacío o es un login, buscamos datos frescos
+        const userProfile = await fetchProfile(session.user.id);
+        setProfile(userProfile);
       } else {
-        console.log("👋 Usuario desconectado");
         setUser(null);
         setProfile(null);
       }
@@ -71,44 +66,45 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const signInWithDni = async (dni, password) => {
+    // Al intentar un nuevo login, bloqueamos la UI preventivamente
+    setLoading(true); 
     const email = `${dni}@logigastos.app`;
-    console.log("🔑 Intentando login con:", email);
     
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      console.error("❌ Error de login:", error.message);
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      setLoading(false);
       throw error;
     }
-    
-    console.log("✅ Login exitoso en Supabase");
-    return data;
   };
 
   const signOut = async () => {
-    console.log("🛑 Cerrando sesión...");
-    const { error } = await supabase.auth.signOut();
-    if (error) console.error("Error al salir:", error);
-    
-    // Forzamos limpieza local inmediata
-    setUser(null);
-    setProfile(null);
-    setLoading(false);
-    
-    // Limpieza agresiva de localStorage para evitar fantasmas
-    localStorage.removeItem(`sb-${import.meta.env.VITE_SUPABASE_PROJECT_ID}-auth-token`);
+    setLoading(true);
+    try {
+      await supabase.auth.signOut();
+      // Limpieza profunda e inmediata de la memoria
+      setUser(null);
+      setProfile(null);
+      localStorage.clear(); 
+    } catch (error) {
+      console.error("Error al salir:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <AuthContext.Provider value={{ user, profile, signInWithDni, signOut, loading }}>
-      {/* Si está cargando, mostramos un spinner simple, si no, la app */}
       {loading ? (
         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-brand-700">
           <div className="w-8 h-8 border-4 border-brand-700 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="font-medium animate-pulse">Iniciando sistema...</p>
+          <p className="font-medium animate-pulse">Sincronizando identidad...</p>
         </div>
       ) : (
         children
