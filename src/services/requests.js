@@ -126,32 +126,71 @@ export const getSapMappings = async () => {
   }
 };
 
-// MEJORA: Función inteligente de guardado (Doble Inserción si es necesario)
-export const saveSapMapping = async (payload) => {
-  try {
-    let finalMotivoId = payload.motivo_id;
+// ============================================================================
+// FUNCIONES DEL MODAL DE MAPEO SAP (DOS PASOS Y ROLLBACK)
+// ============================================================================
 
-    // 1. Verificar si el usuario pidió crear un NUEVO motivo
-    if (payload.motivo_id === 'NEW' && payload.nuevo_motivo_nombre) {
-      const { data: newMotivo, error: motivoError } = await supabase
-        .from('maestro_motivos')
-        .insert([{ nombre: payload.nuevo_motivo_nombre, activo: true }])
-        .select('id')
-        .single();
-        
-      if (motivoError) throw motivoError;
-      finalMotivoId = newMotivo.id; // Asignamos el nuevo ID generado por la BD
+// PASO 1: Crea el motivo o recupera su ID si ya existía
+export const createOrGetMotivo = async (nombre, tipo_gasto) => {
+  try {
+    // 1. Buscamos si ya existe el motivo (ignorando mayúsculas/minúsculas)
+    const { data: existing, error: searchError } = await supabase
+      .from('maestro_motivos')
+      .select('id, nombre')
+      .ilike('nombre', nombre)
+      .eq('tipo_gasto', tipo_gasto)
+      .limit(1)
+      .maybeSingle();
+
+    if (searchError) throw searchError;
+
+    // Si existe, lo devolvemos
+    if (existing) {
+      return { id: existing.id, nombre: existing.nombre };
     }
 
-    // 2. Preparamos el paquete de datos para SAP
+    // 2. Si no existe, lo creamos
+    const { data: newMotivo, error: insertError } = await supabase
+      .from('maestro_motivos')
+      .insert([{ nombre: nombre, tipo_gasto: tipo_gasto, activo: true }])
+      .select('id, nombre')
+      .single();
+
+    if (insertError) throw insertError;
+    return { id: newMotivo.id, nombre: newMotivo.nombre };
+
+  } catch (error) {
+    console.error("Error en createOrGetMotivo:", error);
+    throw error;
+  }
+};
+
+// ROLLBACK: Elimina el motivo creado a medias si el usuario cancela en el Paso 2
+export const rollbackMotivo = async (motivo_id) => {
+  try {
+    const { error } = await supabase
+      .from('maestro_motivos')
+      .delete()
+      .eq('id', motivo_id);
+      
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error("Fallo silencioso en rollbackMotivo:", error);
+    return { success: false };
+  }
+};
+
+// PASO 2: Guarda la configuración de SAP final
+export const saveSapMapping = async (payload) => {
+  try {
     const mappingData = {
-      motivo_id: finalMotivoId,
+      motivo_id: payload.motivo_id,
       tipo_posicion: payload.tipo_posicion,
       clase_condicion: payload.clase_condicion,
       cuenta_contable: payload.cuenta_contable
     };
 
-    // 3. Guardar o Actualizar el Mapeo
     if (payload.id) {
       const { error } = await supabase
         .from('configuracion_cuentas')
@@ -159,7 +198,7 @@ export const saveSapMapping = async (payload) => {
         .eq('id', payload.id);
       if (error) throw error;
     } else {
-      mappingData.activo = true; // Todo mapeo nuevo nace ACTIVO
+      mappingData.activo = true; 
       const { error } = await supabase
         .from('configuracion_cuentas')
         .insert([mappingData]);
@@ -171,7 +210,7 @@ export const saveSapMapping = async (payload) => {
   }
 };
 
-// NUEVA FUNCIÓN: Encendido y apagado de Mapeos SAP
+// Encendido y apagado de Mapeos SAP
 export const toggleSapMappingStatus = async (id, currentStatus) => {
   try {
     const { error } = await supabase
