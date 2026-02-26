@@ -10,7 +10,6 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Función para descargar el perfil con manejo de errores
   const fetchProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -22,7 +21,7 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       return data;
     } catch (err) {
-      console.warn("⚠️ Perfil no encontrado o error de red:", err.message);
+      console.warn("⚠️ Error cargando perfil:", err.message);
       return null;
     }
   };
@@ -31,40 +30,47 @@ export const AuthProvider = ({ children }) => {
     const initializeAuth = async () => {
       try {
         setLoading(true);
-        // 1. Verificamos si hay una sesión activa guardada
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
-          setUser(session.user);
           const userProfile = await fetchProfile(session.user.id);
-          setProfile(userProfile);
+          if (userProfile) {
+            // Perfil cargado correctamente
+            setUser(session.user);
+            setProfile(userProfile);
+          } else {
+            // Sesión corrupta o perfil eliminado: forzamos limpieza
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+          }
         }
       } catch (error) {
         console.error("❌ Error en inicialización:", error);
       } finally {
-        // SALIDA DE EMERGENCIA: Pase lo que pase, liberamos la pantalla de carga
         setLoading(false);
       }
     };
 
     initializeAuth();
 
-    // Escuchador de cambios de sesión (Login / Logout / Expiración)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔔 Evento de Auth:", event);
-      
       try {
         if (session?.user) {
-          setUser(session.user);
-          // Si es un nuevo inicio de sesión, traemos el perfil
           const userProfile = await fetchProfile(session.user.id);
-          setProfile(userProfile);
+          if (userProfile) {
+            setUser(session.user);
+            setProfile(userProfile);
+          } else {
+            setUser(null);
+            setProfile(null);
+          }
         } else {
           setUser(null);
           setProfile(null);
         }
       } catch (error) {
-        console.error("❌ Error al procesar cambio de estado:", error);
+        console.error("❌ Error al procesar evento de auth:", error);
       } finally {
         setLoading(false);
       }
@@ -86,7 +92,7 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       return data;
     } catch (error) {
-      setLoading(false); // Liberamos la carga si el login falla (error de contraseña, etc)
+      setLoading(false);
       throw error;
     }
   };
@@ -96,7 +102,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       await supabase.auth.signOut();
       
-      // Limpieza total inmediata para evitar "fantasmas"
       setUser(null);
       setProfile(null);
       localStorage.clear(); 
@@ -104,8 +109,7 @@ export const AuthProvider = ({ children }) => {
       console.error("Error al salir:", error);
     } finally {
       setLoading(false);
-      // Forzamos recarga para asegurar limpieza de memoria del navegador
-      window.location.href = '/login';
+      window.location.href = '/login'; // Limpieza absoluta
     }
   };
 
