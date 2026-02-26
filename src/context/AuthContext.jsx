@@ -10,6 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Función para descargar el perfil con manejo de errores
   const fetchProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -21,62 +22,82 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       return data;
     } catch (err) {
-      console.warn("⚠️ Error cargando perfil:", err.message);
+      console.warn("⚠️ Perfil no encontrado o error de red:", err.message);
       return null;
     }
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
+    let isMounted = true; // Seguro para evitar fugas de memoria al recargar rápido
+
+    const initializeSession = async () => {
       try {
         setLoading(true);
-        const { data: { session } } = await supabase.auth.getSession();
+        // 1. Buscamos la sesión activa UNA ÚNICA VEZ al arrancar la app
+        const { data: { session }, error } = await supabase.auth.getSession();
         
+        if (error) throw error;
+
         if (session?.user) {
+          if (isMounted) setUser(session.user);
           const userProfile = await fetchProfile(session.user.id);
-          if (userProfile) {
-            // Perfil cargado correctamente
-            setUser(session.user);
-            setProfile(userProfile);
-          } else {
-            // Sesión corrupta o perfil eliminado: forzamos limpieza
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
+          
+          if (isMounted) {
+            if (userProfile) {
+              setProfile(userProfile); // Todo en orden, guardamos el perfil
+            } else {
+              // Si hay sesión pero no hay perfil, matamos la sesión corrupta
+              await supabase.auth.signOut();
+              setUser(null);
+              setProfile(null);
+            }
           }
         }
       } catch (error) {
-        console.error("❌ Error en inicialización:", error);
+        console.error("❌ Error inicializando sesión:", error);
       } finally {
-        setLoading(false);
+        // SALIDA DE EMERGENCIA: Pase lo que pase, liberamos la pantalla de carga
+        if (isMounted) setLoading(false);
       }
     };
 
-    initializeAuth();
+    // Ejecutamos el motor de arranque
+    initializeSession();
 
+    // 2. El Vigilante: Solo escucha eventos NUEVOS (Logins o Logouts manuales)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Clave de la solución: Ignoramos el evento de arranque automático de Supabase
+      // porque ya lo hicimos nosotros mismos de forma controlada arriba.
+      if (event === 'INITIAL_SESSION') return;
+
       try {
-        if (session?.user) {
-          const userProfile = await fetchProfile(session.user.id);
-          if (userProfile) {
-            setUser(session.user);
-            setProfile(userProfile);
-          } else {
+        if (event === 'SIGNED_OUT') {
+          if (isMounted) {
             setUser(null);
             setProfile(null);
           }
-        } else {
-          setUser(null);
-          setProfile(null);
+        } else if (session?.user) {
+          if (isMounted) setUser(session.user);
+          const userProfile = await fetchProfile(session.user.id);
+          
+          if (isMounted) {
+            if (userProfile) {
+              setProfile(userProfile);
+            } else {
+              setUser(null);
+              setProfile(null);
+            }
+          }
         }
       } catch (error) {
-        console.error("❌ Error al procesar evento de auth:", error);
-      } finally {
-        setLoading(false);
+        console.error("❌ Error al procesar cambio de estado:", error);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false; // Desactivamos las actualizaciones si el componente se destruye
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithDni = async (dni, password) => {
@@ -92,7 +113,7 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       return data;
     } catch (error) {
-      setLoading(false);
+      setLoading(false); 
       throw error;
     }
   };
@@ -102,6 +123,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       await supabase.auth.signOut();
       
+      // Limpieza total inmediata para evitar "fantasmas"
       setUser(null);
       setProfile(null);
       localStorage.clear(); 
@@ -109,7 +131,8 @@ export const AuthProvider = ({ children }) => {
       console.error("Error al salir:", error);
     } finally {
       setLoading(false);
-      window.location.href = '/login'; // Limpieza absoluta
+      // Forzamos recarga para asegurar limpieza de memoria del navegador
+      window.location.href = '/login';
     }
   };
 
