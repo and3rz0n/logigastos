@@ -26,24 +26,21 @@ export default function GeneralHistory() {
   const [isExporting, setIsExporting] = useState(false);
   const [motivosMaster, setMotivosMaster] = useState([]);
   
-  // Estado para filtros dinámicos extraídos de los registros reales de la DB
   const [sapFilters, setSapFilters] = useState({
     posiciones: [],
     condiciones: [],
     cuentas: [],
-    tiposGasto: [] // NUEVO: Lista dinámica de tipos de gasto
+    tiposGasto: [] 
   });
 
-  // Estados de Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 50;
 
-  // Estados de Filtros y Búsqueda
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     tipo_gasto: "all",
-    estado: "all", // Mapea a "aprobado" / "rechazado"
+    estado: "all", 
     posicion: "all",
     clase_de_condicion: "all",
     tipo_de_cuenta: "all",
@@ -54,14 +51,12 @@ export default function GeneralHistory() {
     fechaFinFac: ""
   });
 
-  // Carga inicial de maestros y filtros dinámicos
   useEffect(() => {
     if (profile) {
       loadInitialMetadata();
     }
   }, [profile]);
 
-  // Recarga de datos cuando cambia la página, búsqueda o filtros
   useEffect(() => {
     if (profile) {
       loadHistory();
@@ -74,7 +69,7 @@ export default function GeneralHistory() {
       getGeneralHistoryUniqueFilters()
     ]);
     setMotivosMaster(masters.motivos || []);
-    setSapFilters(sapUnique); // Esto llena los desplegables con datos reales (incluyendo tiposGasto)
+    setSapFilters(sapUnique);
   };
 
   const loadHistory = async () => {
@@ -92,7 +87,6 @@ export default function GeneralHistory() {
       const hasActiveFilters = searchTerm !== "" || Object.values(filters).some(v => v !== "all" && v !== "");
 
       if (hasActiveFilters) {
-        // Exportación total ignorando paginación si hay filtros
         dataToExport = await getAllGeneralHistoryDataFiltered(searchTerm, filters);
       } else {
         dataToExport = data;
@@ -111,7 +105,6 @@ export default function GeneralHistory() {
       ];
 
       const rows = dataToExport.map(item => {
-        // Traducción de valores para el Excel
         const isApproved = item.validacion_analista === 'VERDADERO' || item.validacion_analista === true;
         const statusText = isApproved ? 'Aprobado' : 'Rechazado';
         
@@ -147,7 +140,6 @@ export default function GeneralHistory() {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Cabecera con Botón Esmeralda dinámico */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -171,9 +163,8 @@ export default function GeneralHistory() {
         </Button>
       </div>
 
-      {/* Organización: Búsqueda sobre los filtros */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-6">
-        {/* Barra de Búsqueda */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-8">
+        {/* BUSCADOR - OCUPA TODO EL ANCHO */}
         <div className="relative">
           <Search className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
           <Input
@@ -187,8 +178,8 @@ export default function GeneralHistory() {
           />
         </div>
 
-        {/* --- FILA 1 DE FILTROS: Categorías y Estados --- */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pb-4 border-b border-gray-100 dark:border-slate-700/50">
+        {/* FILA 1: CATEGORÍAS GENERALES (4 Columnas en Desktop) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <FilterSelect 
             label="Tipo Gasto" 
             value={filters.tipo_gasto} 
@@ -199,7 +190,7 @@ export default function GeneralHistory() {
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Motivo</label>
             <select 
-              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-base font-medium dark:text-white outline-none cursor-pointer"
+              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-sm font-medium dark:text-white outline-none cursor-pointer"
               value={filters.motivo}
               onChange={(e) => {setFilters({...filters, motivo: e.target.value}); setCurrentPage(1);}}
             >
@@ -211,7 +202,7 @@ export default function GeneralHistory() {
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Validación Analista</label>
             <select 
-              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-base font-medium dark:text-white outline-none cursor-pointer"
+              className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-sm font-medium dark:text-white outline-none cursor-pointer"
               value={filters.estado}
               onChange={(e) => {setFilters({...filters, estado: e.target.value}); setCurrentPage(1);}}
             >
@@ -224,71 +215,70 @@ export default function GeneralHistory() {
           <FilterSelect label="Posición" value={filters.posicion} options={["all", ...sapFilters.posiciones]} onChange={(v) => {setFilters({...filters, posicion: v}); setCurrentPage(1);}} />
         </div>
 
-        {/* --- FILA 2 DE FILTROS: Rangos de Fechas y Resto SAP --- */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
-            {/* Cápsula de Fechas */}
-            <div className="md:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase ml-1 flex items-center gap-1">Rango Fecha de Registro</label>
-                    <div className="flex gap-2">
-                        <Input 
-                            type="date" 
-                            className="h-11 text-base dark:text-white"
-                            value={filters.fechaInicioReg}
-                            onChange={(e) => {setFilters({...filters, fechaInicioReg: e.target.value}); setCurrentPage(1);}}
-                        />
-                        <Input 
-                            type="date" 
-                            className="h-11 text-base dark:text-white"
-                            value={filters.fechaFinReg}
-                            onChange={(e) => {setFilters({...filters, fechaFinReg: e.target.value}); setCurrentPage(1);}}
-                        />
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase ml-1 flex items-center gap-1">Rango Fecha de Factura</label>
-                    <div className="flex gap-2">
-                        <Input 
-                            type="date" 
-                            className="h-11 text-base dark:text-white"
-                            value={filters.fechaInicioFac}
-                            onChange={(e) => {setFilters({...filters, fechaInicioFac: e.target.value}); setCurrentPage(1);}}
-                        />
-                        <Input 
-                            type="date" 
-                            className="h-11 text-base dark:text-white"
-                            value={filters.fechaFinFac}
-                            onChange={(e) => {setFilters({...filters, fechaFinFac: e.target.value}); setCurrentPage(1);}}
-                        />
-                    </div>
-                </div>
+        {/* FILA 2: FECHAS Y SAP TÉCNICO (Grid de 12 para control total) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end pt-6 border-t border-gray-50 dark:border-slate-700/50">
+          
+          {/* GRUPO FECHA REGISTRO - OCUPA 4/12 */}
+          <div className="lg:col-span-4 space-y-2">
+            <label className="text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase ml-1">Rango Fecha de Registro</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input 
+                type="date" 
+                className="h-10 text-xs dark:text-white flex-1"
+                value={filters.fechaInicioReg}
+                onChange={(e) => {setFilters({...filters, fechaInicioReg: e.target.value}); setCurrentPage(1);}}
+              />
+              <Input 
+                type="date" 
+                className="h-10 text-xs dark:text-white flex-1"
+                value={filters.fechaFinReg}
+                onChange={(e) => {setFilters({...filters, fechaFinReg: e.target.value}); setCurrentPage(1);}}
+              />
             </div>
+          </div>
 
-            {/* Resto SAP */}
-            <div className="md:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-               <FilterSelect label="Condición" value={filters.clase_de_condicion} options={["all", ...sapFilters.condiciones]} onChange={(v) => {setFilters({...filters, clase_de_condicion: v}); setCurrentPage(1);}} />
-               <FilterSelect label="Cuenta" value={filters.tipo_de_cuenta} options={["all", ...sapFilters.cuentas]} onChange={(v) => {setFilters({...filters, tipo_de_cuenta: v}); setCurrentPage(1);}} />
+          {/* GRUPO FECHA FACTURA - OCUPA 4/12 */}
+          <div className="lg:col-span-4 space-y-2">
+            <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase ml-1">Rango Fecha de Factura</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input 
+                type="date" 
+                className="h-10 text-xs dark:text-white flex-1"
+                value={filters.fechaInicioFac}
+                onChange={(e) => {setFilters({...filters, fechaInicioFac: e.target.value}); setCurrentPage(1);}}
+              />
+              <Input 
+                type="date" 
+                className="h-10 text-xs dark:text-white flex-1"
+                value={filters.fechaFinFac}
+                onChange={(e) => {setFilters({...filters, fechaFinFac: e.target.value}); setCurrentPage(1);}}
+              />
             </div>
+          </div>
+
+          {/* FILTROS SAP TÉCNICOS - OCUPAN 4/12 */}
+          <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FilterSelect label="Condición" value={filters.clase_de_condicion} options={["all", ...sapFilters.condiciones]} onChange={(v) => {setFilters({...filters, clase_de_condicion: v}); setCurrentPage(1);}} />
+            <FilterSelect label="Cuenta" value={filters.tipo_de_cuenta} options={["all", ...sapFilters.cuentas]} onChange={(v) => {setFilters({...filters, tipo_de_cuenta: v}); setCurrentPage(1);}} />
+          </div>
         </div>
         
-        {/* Botón de Limpiar Fechas (Si hay alguna activa) */}
+        {/* BOTÓN LIMPIAR DINÁMICO */}
         {(filters.fechaInicioReg || filters.fechaFinReg || filters.fechaInicioFac || filters.fechaFinFac) && (
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-2">
                 <button 
                   onClick={() => {
                       setFilters({...filters, fechaInicioReg: "", fechaFinReg: "", fechaInicioFac: "", fechaFinFac: ""});
                       setCurrentPage(1);
                   }}
-                  className="text-xs font-bold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                  className="text-[10px] font-bold text-red-500 hover:text-red-600 dark:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1"
                 >
-                  Limpiar filtros de fecha
+                  <X className="w-3 h-3" /> Limpiar rangos de fecha
                 </button>
             </div>
         )}
       </div>
 
-      {/* Tabla de Resultados con desplazamiento horizontal */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left border-collapse table-auto">
@@ -372,16 +362,11 @@ export default function GeneralHistory() {
                   <Td>{item.monto_carga_min_programador || '---'}</Td>
                   <Td className="font-medium">{item.ceco}</Td>
                   <Td className="font-mono text-[10px] text-gray-400 dark:text-gray-500">{item.id_ceco}</Td>
-                  
-                  {/* Nuevos Badges Visuales */}
                   <Td><BadgeStatus val={item.validacion_analista} /></Td>
-                  
                   <Td className="truncate max-w-[200px]">{item.comentarios_analista}</Td>
                   <Td className="text-[10px] text-gray-400 dark:text-gray-500 italic">{item.correo_asunto}</Td>
-                  
                   <Td className="text-center"><BadgeStatus val={item.gasto_autorizado} /></Td>
                   <Td className="text-center"><BadgePay status={item.pagar} /></Td>
-                  
                   <Td className="font-black text-brand-900 dark:text-brand-400 whitespace-nowrap text-right pr-6">S/ {item.monto_total?.toFixed(2)}</Td>
                   <Td className="font-mono text-center text-gray-500">{item.posicion}</Td>
                   <Td className="font-mono text-center text-gray-500">{item.clase_de_condicion}</Td>
@@ -392,7 +377,6 @@ export default function GeneralHistory() {
           </table>
         </div>
 
-        {/* Paginación */}
         <div className="p-4 bg-gray-50 dark:bg-slate-700/50 border-t border-gray-100 dark:border-slate-600 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Página {currentPage} de {totalPages || 1}</span>
@@ -412,7 +396,6 @@ export default function GeneralHistory() {
   );
 }
 
-// Helpers locales de diseño
 function Th({ children, className }) { return <th className={cn("px-4 py-4 text-[10px] font-bold uppercase text-white whitespace-nowrap bg-brand-900 dark:bg-brand-950 border-x border-brand-800/50", className)}>{children}</th>; }
 function Td({ children, className }) { return <td className={cn("px-4 py-3 border-b border-gray-50 dark:border-slate-700/50 text-gray-600 dark:text-gray-300 whitespace-nowrap", className)}>{children}</td>; }
 
@@ -421,7 +404,7 @@ function FilterSelect({ label, value, options, onChange }) {
     <div className="space-y-1">
       <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{label}</label>
       <select 
-        className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-base font-medium dark:text-white outline-none cursor-pointer" 
+        className="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-sm font-medium dark:text-white outline-none cursor-pointer" 
         value={value} 
         onChange={(e) => onChange(e.target.value)}
       >
@@ -471,3 +454,6 @@ function BadgeFF({ status }) {
     </span>
   ); 
 }
+
+// ICONO X PARA LIMPIAR
+function X(props) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>; }
