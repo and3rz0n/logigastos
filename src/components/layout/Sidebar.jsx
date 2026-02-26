@@ -18,16 +18,23 @@ import {
   BarChart,
   Table,
   Sun,
-  Moon
+  Moon,
+  Download, // Icono para el botón de instalar
+  Share // Icono de compartir para la instrucción de iOS
 } from 'lucide-react';
 
 export function Sidebar({ isOpen, setIsOpen }) {
   const { profile, signOut } = useAuth();
-  const { theme, setTheme } = useTheme(); // Usamos setTheme para el control directo
+  const { theme, setTheme } = useTheme(); 
   const location = useLocation();
 
-  // Mantener el submenú abierto si estamos en alguna ruta de dashboard
   const [isDashboardsOpen, setIsDashboardsOpen] = useState(false);
+  
+  // --- ESTADOS PARA PWA E INSTALACIÓN ---
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false); // Detectar si ya está instalada
 
   useEffect(() => {
     if (location.pathname.includes('/dashboard')) {
@@ -35,7 +42,56 @@ export function Sidebar({ isOpen, setIsOpen }) {
     }
   }, [location.pathname]);
 
-  // Lógica de Permisos
+  // --- LÓGICA DE DETECCIÓN DE PWA E IOS ---
+  useEffect(() => {
+    // 1. Detectar si el usuario está en un dispositivo iOS (iPhone/iPad)
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(isIOSDevice);
+
+    // 2. Detectar si la app ya está instalada o ejecutándose en modo "Standalone"
+    const isRunningStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    setIsStandalone(isRunningStandalone);
+
+    // 3. Escuchar el evento de instalación para PC y Android
+    const handleBeforeInstallPrompt = (e) => {
+      // Prevenir que Chrome muestre el mini-infobar automático
+      e.preventDefault();
+      // Guardar el evento para poder dispararlo luego con nuestro botón
+      setDeferredPrompt(e);
+      // Habilitar la visibilidad del botón de instalación
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // 4. Limpieza de eventos
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    
+    // Mostrar el prompt nativo de instalación
+    deferredPrompt.prompt();
+    
+    // Esperar a que el usuario responda al prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      console.log('El usuario aceptó la instalación');
+      // Una vez aceptado, no volverá a salir
+      setIsInstallable(false);
+    } else {
+      console.log('El usuario rechazó la instalación');
+    }
+    
+    // Limpiar el evento guardado
+    setDeferredPrompt(null);
+  };
+
   const userRole = profile?.rol || '';
   
   const isTransportista = userRole === 'operador_logistico';
@@ -44,19 +100,15 @@ export function Sidebar({ isOpen, setIsOpen }) {
   const isVisualizador = userRole === 'usuario_visualizador';
   const isAdminOrDev = ['admin', 'developer'].includes(userRole);
 
-  // Reglas de visibilidad
   const canSeePersonalDashboard = isTransportista || isAprobador || isAdminOrDev;
   const canSeeGlobalDashboards = isPagador || isVisualizador || isAdminOrDev;
   
-  // Reglas de operación
-  const canSeeMisGastos = isTransportista || isAdminOrDev || isPagador; // Pagador ahora puede entrar
+  const canSeeMisGastos = isTransportista || isAdminOrDev || isPagador; 
   const canApprove = isAprobador || isAdminOrDev;
   const canManagePayments = isPagador || isAdminOrDev;
 
-  // Acceso a Reportes Críticos (Historial General)
-  const canSeeHistory = isAdminOrDev || isPagador; // NUEVO: Pagador habilitado
+  const canSeeHistory = isAdminOrDev || isPagador; 
 
-  // Función simplificada para alternar solo entre Light y Dark
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
@@ -214,6 +266,33 @@ export function Sidebar({ isOpen, setIsOpen }) {
 
         <div className="border-t border-gray-100 dark:border-slate-700/50 bg-white dark:bg-slate-800 shrink-0">
           <div className="p-4 space-y-2">
+            
+            {/* --- SECCIÓN DE INSTALACIÓN PWA (BOTÓN O TARJETA) --- */}
+            {!isStandalone && (
+              <>
+                {/* Botón para Android/PC (Se muestra solo si el evento beforeinstallprompt se disparó) */}
+                {isInstallable && (
+                  <button
+                    onClick={handleInstallClick}
+                    className="flex items-center gap-3 px-4 py-3 w-full text-sm font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 dark:text-brand-400 dark:bg-brand-900/20 dark:hover:bg-brand-900/40 dark:border-brand-800/50 rounded-xl transition-all outline-none"
+                  >
+                    <Download className="w-5 h-5 shrink-0" />
+                    <span>Instalar Aplicación</span>
+                  </button>
+                )}
+
+                {/* Tarjeta Educativa para iOS (Se muestra solo en navegadores de dispositivos Apple) */}
+                {isIOS && !isInstallable && (
+                  <div className="px-4 py-3 w-full text-xs text-gray-600 bg-gray-50 border border-gray-200 dark:text-gray-300 dark:bg-slate-800 dark:border-slate-700 rounded-xl">
+                    <p className="font-bold text-gray-900 dark:text-white mb-1">Instala la App</p>
+                    <p className="leading-snug">
+                      Toca el ícono <Share className="w-3 h-3 inline text-blue-500" /> en Safari y selecciona <span className="font-semibold">"Agregar a Inicio"</span>.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+            
             <button
               onClick={toggleTheme}
               className="flex items-center justify-between px-4 py-3 w-full text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors outline-none"
