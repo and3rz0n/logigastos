@@ -5,5 +5,63 @@
 @layer base {
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
+    /* 1. Anti-Parpadeo Móvil: Quita el destello feo al tocar botones en celulares */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* 2. Desplazamiento Suave Global */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* 3. Selección de Texto Personalizada (Se verá más elegante al copiar texto) */
+  ::selection {
+    @apply bg-brand-500/20 text-brand-900 dark:bg-brand-500/40 dark:text-white;
+  }
+
+  /* ====================================================================
+     ESTILOS DE SCROLLBAR (TIPO MAC / APP NATIVA)
+     ==================================================================== */
+
+  /* Para Firefox (Usa propiedades directas) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent; /* Color de la barra y color del fondo */
+  }
+  
+  /* Firefox en Modo Oscuro */
+  .dark * {
+    scrollbar-color: #475569 transparent;
+  }
+
+  /* Para Google Chrome, Edge, Safari y tu PWA */
+  ::-webkit-scrollbar {
+    width: 6px;  /* Grosor de la barra vertical */
+    height: 6px; /* Grosor de la barra horizontal (para las tablas) */
+  }
+
+  /* El "riel" o fondo por donde baja la barra (Transparente para que se vea limpio) */
+  ::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px; /* Pequeño margen para que no choque con las esquinas */
+  }
+
+  /* La "bolita" o barra que arrastras */
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full transition-colors;
+  }
+
+  /* Cuando pasas el mouse por encima de la barra */
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+
+  /* --- ADAPTACIÓN AL MODO OSCURO --- */
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-slate-600;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500;
   }
 }
