@@ -8,7 +8,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate', // Hace que la app se actualice sola si subes cambios
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'], 
+      injectRegister: 'auto',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'logo-softys.png'], 
       manifest: {
         name: 'LogiGastos Softys', // Nombre completo al instalar
         short_name: 'LogiGastos', // Nombre corto bajo el ícono
@@ -16,6 +17,8 @@ export default defineConfig({
         theme_color: '#0f172a', // Color de la barra de estado del celular (Azul oscuro)
         background_color: '#ffffff', // Color de fondo al abrir la app
         display: 'standalone', // Le quita la barra de navegador para que parezca app nativa
+        start_url: '/', // Desde dónde inicia la app
+        id: '/', // Identificador único requerido por Chrome
         icons: [
           {
             src: '/pwa-192x192.png',
@@ -29,6 +32,10 @@ export default defineConfig({
             purpose: 'any maskable'
           }
         ]
+      },
+      workbox: {
+        // Le dice al Service Worker exactamente qué archivos guardar para funcionar offline
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}']
       }
     })
   ],

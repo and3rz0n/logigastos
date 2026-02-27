@@ -4,7 +4,11 @@ import { Toaster } from 'sonner'
 import App from './App.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import './index.css'
-import 'virtual:pwa-register';
+
+// --- INICIO: Activación explícita del Service Worker (Motor PWA) ---
+import { registerSW } from 'virtual:pwa-register'
+registerSW({ immediate: true })
+// --- FIN ---
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
