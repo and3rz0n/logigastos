@@ -3,15 +3,15 @@ import { toast } from 'sonner';
 import { 
   Users, Truck, Map, Briefcase, Plus, Edit2, 
   Trash2, Save, X, Search, Phone, Shield, Power, CheckCircle, AlertCircle, Eye, EyeOff, Settings2, Car,
-  ChevronLeft, ChevronRight, Hash, DollarSign, Tag, FilterX, Filter, Building2
+  ChevronLeft, ChevronRight, Hash, DollarSign, Tag, FilterX, Filter, Building2, AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { 
-  getSystemConfig, updateSystemConfig, getAllVehicles, saveVehicle, 
+  getSystemConfig, updateSystemConfig, updateMaintenanceConfig, getAllVehicles, saveVehicle, 
   getSapMappings, saveSapMapping, toggleSapMappingStatus, updateZonaPorcentaje,
   getAllDestinatarios, saveDestinatario, toggleDestinatarioStatus,
-  createOrGetMotivo, rollbackMotivo // <-- Nuevas funciones importadas
+  createOrGetMotivo, rollbackMotivo 
 } from '../services/requests';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -722,46 +722,225 @@ function ZonasManager() {
 
 // --- SUB-COMPONENTE: AJUSTES DE SISTEMA ---
 function SystemManager() {
+  const { profile } = useAuth();
   const [longitud, setLongitud] = useState(8);
   const [loading, setLoading] = useState(false);
+  
+  // Estados para Modo Mantenimiento
+  const [mantenimientoActivo, setMantenimientoActivo] = useState(false);
+  const [rolesPermitidos, setRolesPermitidos] = useState(['developer', 'admin']);
+  const [loadingMantenimiento, setLoadingMantenimiento] = useState(false);
+
+  // Lista de roles a mostrar en los switches
+  const allRoles = [
+    { id: 'operador_logistico', label: 'Transportistas' },
+    { id: 'aprobador', label: 'Aprobadores' },
+    { id: 'usuario_pagador', label: 'Tesorería / Pagadores' },
+    { id: 'usuario_visualizador', label: 'Visualizadores' }
+  ];
+
+  // Si es developer, le permitimos bloquear también a los admins
+  if (profile?.rol === 'developer') {
+    allRoles.push({ id: 'admin', label: 'Administradores (Peligro)' });
+  }
+
   useEffect(() => { loadConfig(); }, []);
+
   const loadConfig = async () => {
     const data = await getSystemConfig();
-    if (data?.longitud_picking) setLongitud(data.longitud_picking);
+    if (data) {
+      if (data.longitud_picking) setLongitud(data.longitud_picking);
+      setMantenimientoActivo(data.mantenimiento_activo || false);
+      setRolesPermitidos(data.roles_permitidos_mantenimiento || ['developer', 'admin']);
+    }
   };
-  const handleSave = async () => {
+
+  const handleSavePicking = async () => {
     if (!longitud || longitud < 1) return toast.error("Ingresa una longitud válida");
     setLoading(true);
     try {
       await updateSystemConfig(longitud);
-      toast.success("Ajustes del sistema actualizados correctamente");
+      toast.success("Longitud de picking actualizada");
     } catch (err) {
       toast.error("Error al guardar la configuración");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleToggleMantenimiento = async (nuevoEstado) => {
+    setLoadingMantenimiento(true);
+    try {
+      await updateMaintenanceConfig(nuevoEstado, rolesPermitidos);
+      setMantenimientoActivo(nuevoEstado);
+      toast.success(nuevoEstado ? "Modo Mantenimiento ACTIVADO" : "Sistema ACTIVADO con normalidad");
+    } catch (error) {
+      toast.error("Error al cambiar estado de mantenimiento");
+    } finally {
+      setLoadingMantenimiento(false);
+    }
+  };
+
+  const handleToggleRol = async (rolId) => {
+    let nuevaLista = [...rolesPermitidos];
+    
+    if (nuevaLista.includes(rolId)) {
+      // Si el rol ya está en la lista (puede entrar), lo quitamos (lo bloqueamos)
+      nuevaLista = nuevaLista.filter(r => r !== rolId);
+    } else {
+      // Si no estaba, lo agregamos (lo dejamos entrar)
+      nuevaLista.push(rolId);
+    }
+
+    setRolesPermitidos(nuevaLista);
+
+    // Guardar automáticamente en la BD al hacer clic en el switch del rol
+    try {
+      await updateMaintenanceConfig(mantenimientoActivo, nuevaLista);
+      toast.success(`Permisos actualizados`);
+    } catch (error) {
+      toast.error("Error al guardar permisos de rol");
+      // Revertir estado si falla
+      setRolesPermitidos(rolesPermitidos); 
+    }
+  };
+
+  // Componente de Switch reutilizable interno
+  const CustomSwitch = ({ checked, onChange, disabled }) => (
+    <button
+      type="button"
+      onClick={onChange}
+      disabled={disabled}
+      className={cn(
+        "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+        checked ? "bg-green-600 dark:bg-green-500" : "bg-gray-200 dark:bg-slate-700",
+        disabled && "opacity-50 cursor-not-allowed"
+      )}
+    >
+      <span
+        className={cn(
+          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+          checked ? "translate-x-5" : "translate-x-0"
+        )}
+      />
+    </button>
+  );
+
   return (
-    <div className="max-w-xl space-y-4">
-      <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4">Ajustes Globales</h3>
-      <div className="bg-slate-50 dark:bg-slate-900/40 border border-gray-200 dark:border-slate-700 p-6 rounded-xl space-y-4">
-        <div>
-          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-            Límite de dígitos del N° Transporte (Picking)
-          </label>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-            Define la cantidad exacta de números que el transportista deberá ingresar al crear una nueva solicitud.
-          </p>
-          <Input 
-            type="number" 
-            value={longitud} 
-            onChange={(e) => setLongitud(e.target.value)} 
-            placeholder="Ej: 8" 
-          />
+    <div className="max-w-2xl space-y-6">
+      
+      {/* SECCIÓN 1: AJUSTES GLOBALES (PICKING) */}
+      <div>
+        <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4">Ajustes Operativos</h3>
+        <div className="bg-slate-50 dark:bg-slate-900/40 border border-gray-200 dark:border-slate-700 p-6 rounded-xl space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+              Límite de dígitos del N° Transporte (Picking)
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              Define la cantidad exacta de números que el transportista deberá ingresar al crear una nueva solicitud.
+            </p>
+            <Input 
+              type="number" 
+              value={longitud} 
+              onChange={(e) => setLongitud(e.target.value)} 
+              placeholder="Ej: 8" 
+              className="max-w-xs"
+            />
+          </div>
+          <Button onClick={handleSavePicking} isLoading={loading} size="sm">
+            <Save className="w-4 h-4 mr-2" /> Guardar Límite
+          </Button>
         </div>
-        <Button onClick={handleSave} isLoading={loading} className="w-full sm:w-auto">
-          <Save className="w-4 h-4 mr-2" /> Guardar Ajustes
-        </Button>
+      </div>
+
+      <hr className="border-gray-200 dark:border-slate-700" />
+
+      {/* SECCIÓN 2: MODO MANTENIMIENTO */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <AlertTriangle className="w-5 h-5 text-orange-500" />
+          <h3 className="font-bold text-lg text-gray-900 dark:text-white">Modo Mantenimiento</h3>
+        </div>
+        
+        <div className={cn(
+          "border p-6 rounded-xl space-y-6 transition-colors duration-300",
+          mantenimientoActivo 
+            ? "bg-orange-50/50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-900/50" 
+            : "bg-slate-50 dark:bg-slate-900/40 border-gray-200 dark:border-slate-700"
+        )}>
+          
+          {/* INTERRUPTOR MAESTRO */}
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-bold text-gray-900 dark:text-white">
+                Estado del Sistema
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Apaga este interruptor para poner la plataforma en mantenimiento y bloquear el acceso a roles no permitidos.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={cn(
+                "text-xs font-bold px-3 py-1 rounded-full uppercase",
+                mantenimientoActivo 
+                  ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" 
+                  : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+              )}>
+                {mantenimientoActivo ? "EN MANTENIMIENTO" : "SISTEMA ACTIVO"}
+              </span>
+              {/* Invertimos la lógica del checked: cuando NO hay mantenimiento, el switch está encendido (verde) */}
+              <CustomSwitch 
+                checked={!mantenimientoActivo} 
+                onChange={() => handleToggleMantenimiento(!mantenimientoActivo)} 
+                disabled={loadingMantenimiento}
+              />
+            </div>
+          </div>
+
+          {/* LISTA DE ROLES (SE MUESTRA SOLO SI ESTÁ ACTIVO) */}
+          {mantenimientoActivo && (
+            <div className="pt-4 border-t border-orange-200 dark:border-orange-900/50 animate-in fade-in slide-in-from-top-4">
+              <p className="text-sm font-bold text-gray-900 dark:text-white mb-4">
+                ¿Qué roles pueden entrar durante el mantenimiento?
+              </p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {allRoles.map(rol => {
+                  // Si el rol está en la lista de permitidos, el switch está activado (ON)
+                  const puedeEntrar = rolesPermitidos.includes(rol.id);
+                  
+                  return (
+                    <div key={rol.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700">
+                      <span className={cn(
+                        "text-sm font-medium",
+                        rol.id === 'admin' ? "text-red-600 dark:text-red-400 font-bold" : "text-gray-700 dark:text-gray-300"
+                      )}>
+                        {rol.label}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-[10px] uppercase font-bold",
+                          puedeEntrar ? "text-green-600 dark:text-green-400" : "text-gray-400"
+                        )}>
+                          {puedeEntrar ? "PERMITIDO" : "BLOQUEADO"}
+                        </span>
+                        <CustomSwitch 
+                          checked={puedeEntrar} 
+                          onChange={() => handleToggleRol(rol.id)} 
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-400 mt-4 italic">
+                * El rol Developer jamás puede ser bloqueado del sistema por seguridad.
+              </p>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );

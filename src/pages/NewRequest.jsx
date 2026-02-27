@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -29,6 +30,15 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { cn } from "../utils/cn";
 
+// Utilidad para calcular días de desfase
+const getDaysDiff = (dateStr) => {
+  if (!dateStr) return 0;
+  const today = new Date(getTodayPeru() + "T00:00:00");
+  const invoiceDate = new Date(dateStr + "T00:00:00");
+  const diffTime = today - invoiceDate;
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+};
+
 export default function NewRequest() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -53,6 +63,12 @@ export default function NewRequest() {
   const [approvers, setApprovers] = useState([]);
   const [destinatarioNombre, setDestinatarioNombre] = useState(null);
   const [destinatarioId, setDestinatarioId] = useState(null);
+
+  // Estados para el modal de desfase
+  const [showLateModal, setShowLateModal] = useState(false);
+  const [lateDays, setLateDays] = useState(0);
+  const [pendingFormData, setPendingFormData] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const {
     register,
@@ -128,6 +144,11 @@ export default function NewRequest() {
   const zona = watch("zona");
   const volumen = watch("volumen");
   const tarifa = watch("precio_unitario");
+  const fechaSeleccionada = watch("fecha");
+
+  // Cálculo en vivo del desfase para la tarjetita UI
+  const diasDesfase = getDaysDiff(fechaSeleccionada);
+  const esDesfase = diasDesfase > 7;
 
   useEffect(() => {
     const buscarDestinatario = async () => {
@@ -153,10 +174,9 @@ export default function NewRequest() {
     setValue("precio_unitario", "");
     setValue("ruta_falso_flete", "");
     setValue("sustento", "");
-    setValue("motivo_gasto", ""); // Limpiamos el motivo al cambiar tipo
+    setValue("motivo_gasto", "");
   }, [tipoGasto, setValue]);
 
-  // --- LÓGICA DE CÁLCULO DINÁMICO ---
   useEffect(() => {
     if (!vehiculoId || !tipoGasto) return;
     if (
@@ -283,38 +303,55 @@ export default function NewRequest() {
     return null;
   };
 
+  // PASO 1: Intercepción y validación
   const onSubmit = async (data) => {
+    if (!destinatarioId) {
+      toast.error("Código de destinatario inválido");
+      return;
+    }
+
+    if (data.nro_transporte.length !== pickingLength) {
+      setPickingError(true);
+      toast.error(
+        `El N° de Transporte (Picking) debe tener exactamente ${pickingLength} dígitos.`,
+      );
+      return;
+    }
+
+    if (
+      data.tipo_gasto === "Carga < al % mínimo" &&
+      (!data.monto || parseFloat(data.monto) <= 0)
+    ) {
+      toast.error("El volumen cargado supera el mínimo. No aplica cobro.");
+      return;
+    }
+
+    // Comprobar si hay desfase
+    const desfase = getDaysDiff(data.fecha);
+
+    if (desfase > 7) {
+      // Abrimos el modal y pausamos el proceso
+      setLateDays(desfase);
+      setPendingFormData(data);
+      setShowLateModal(true);
+    } else {
+      // Guardamos directamente si no hay desfase
+      await processRegistration(data);
+    }
+  };
+
+  // PASO 2: Guardado Real en Base de Datos
+  const processRegistration = async (data) => {
+    setIsSaving(true);
     try {
-      if (!destinatarioId) {
-        toast.error("Código de destinatario inválido");
-        return;
-      }
-
-      if (data.nro_transporte.length !== pickingLength) {
-        setPickingError(true);
-        toast.error(
-          `El N° de Transporte (Picking) debe tener exactamente ${pickingLength} dígitos.`,
-        );
-        return;
-      }
-
-      if (
-        data.tipo_gasto === "Carga < al % mínimo" &&
-        (!data.monto || parseFloat(data.monto) <= 0)
-      ) {
-        toast.error("El volumen cargado supera el mínimo. No aplica cobro.");
-        return;
-      }
-
       const motivoFinal = data.motivo_gasto || data.sustento || "";
-      
-      // AHORA PASAMOS 5 PARÁMETROS, INCLUYENDO EL CLIENTE
+
       const isDuplicate = await checkDuplicateRequest(
         user.id,
         data.nro_transporte,
         data.tipo_gasto,
         motivoFinal,
-        destinatarioId 
+        destinatarioId,
       );
 
       if (isDuplicate) {
@@ -362,10 +399,12 @@ export default function NewRequest() {
       navigate("/mis-solicitudes");
     } catch (error) {
       toast.error("Error al guardar", { description: error.message });
+    } finally {
+      setIsSaving(false);
+      setShowLateModal(false);
     }
   };
 
-  // Filtrado dinámico de motivos según el tipo de gasto seleccionado
   const motivosFiltrados = masters.motivosGenerales.filter(
     (m) => m.tipo_gasto === tipoGasto,
   );
@@ -535,6 +574,50 @@ export default function NewRequest() {
               </label>
               <Input type="date" {...register("fecha", { required: true })} />
             </div>
+
+            {/* TARJETA INFORMATIVA DE DESFASE (NUEVA) */}
+            <div className="md:col-span-2 mt-2">
+              <div
+                className={cn(
+                  "p-4 rounded-xl border flex gap-3 animate-in fade-in transition-colors",
+                  esDesfase
+                    ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                    : "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+                )}
+              >
+                <Info
+                  className={cn(
+                    "w-5 h-5 flex-shrink-0 mt-0.5",
+                    esDesfase ? "text-red-500" : "text-blue-500",
+                  )}
+                />
+                <div className="space-y-1">
+                  <p
+                    className={cn(
+                      "text-sm font-bold",
+                      esDesfase
+                        ? "text-red-800 dark:text-red-200"
+                        : "text-blue-800 dark:text-blue-200",
+                    )}
+                  >
+                    {esDesfase
+                      ? `¡Atención! Este gasto tiene ${diasDesfase} días de desfase.`
+                      : "Registro de gastos a tiempo"}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-sm",
+                      esDesfase
+                        ? "text-red-700 dark:text-red-300"
+                        : "text-blue-700 dark:text-blue-300",
+                    )}
+                  >
+                    Recuerda registrar tus gastos a tiempo. Máximo son 7 días
+                    luego de la fecha de factura.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -544,7 +627,6 @@ export default function NewRequest() {
               <DollarSign className="w-4 h-4" /> Detalle Económico
             </h3>
 
-            {/* ÁREA ATRIBUIBLE REUBICADA */}
             <div className="space-y-2">
               <label className="text-sm font-medium dark:text-gray-300">
                 Área Atribuible
@@ -580,7 +662,6 @@ export default function NewRequest() {
                 <option value="Zona rígida">1.4. Zona rígida</option>
               </optgroup>
 
-              {/* Ahora Maniobras se verá como un encabezado oscuro */}
               <optgroup label="2. Maniobras">
                 <option value="Maniobras">2.1. Maniobras</option>
               </optgroup>
@@ -593,7 +674,6 @@ export default function NewRequest() {
             </select>
           </div>
 
-          {/* MOTIVO DEL GASTO DINÁMICO */}
           {tipoGasto && (
             <div className="space-y-2 animate-in slide-in-from-left-2">
               <label className="text-sm font-medium dark:text-gray-300">
@@ -751,11 +831,49 @@ export default function NewRequest() {
         <Button
           type="submit"
           className="w-full h-14 text-lg font-bold shadow-xl shadow-brand-700/20 dark:shadow-none"
-          isLoading={isSubmitting}
+          isLoading={isSubmitting || isSaving}
         >
           <Save className="mr-2 h-5 w-5" /> Registrar Solicitud
         </Button>
       </form>
+
+      {/* MODAL DE DESFASE (NUEVO - CON PORTAL) */}
+      {showLateModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm transition-all duration-300">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 border border-red-100 dark:border-slate-700">
+              <div className="flex items-center gap-3 text-red-600 dark:text-red-400 mb-4">
+                <AlertCircle className="w-8 h-8 flex-shrink-0" />
+                <h3 className="text-xl font-bold">Registro con Desfase</h3>
+              </div>
+              <p className="text-gray-600 dark:text-gray-300 mb-8 text-base leading-relaxed">
+                ¿Seguro que desea registrar su solicitud de gasto con desfase?
+                Han pasado{" "}
+                <strong className="text-red-600 dark:text-red-400 font-extrabold">
+                  {lateDays} días
+                </strong>{" "}
+                con respecto a la fecha de la factura.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowLateModal(false)}
+                  className="w-full sm:w-auto"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => processRegistration(pendingFormData)}
+                  isLoading={isSaving}
+                  className="w-full sm:w-auto bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"
+                >
+                  Sí, registrar con desfase
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body, // <-- EL DESTINO DE LA TELETRANSPORTACIÓN
+        )}
     </div>
   );
 }

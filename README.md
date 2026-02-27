@@ -11,6 +11,9 @@ El sistema ha evolucionado a una aplicación móvil instalable (PWA) para facili
 * **Instalación Nativa:** Capacidad de instalar la aplicación directamente en la pantalla de inicio de dispositivos iOS y Android sin pasar por tiendas de aplicaciones.
 * **Interfaz Standalone:** Experiencia inmersiva sin barra de navegador, con colores de tema personalizados corporativos y motor `Service Worker` impulsado por Vite PWA.
 * **Optimización Mobile (Anti-Zoom):** Implementación de estándares visuales que bloquean el zoom involuntario en dispositivos iOS al interactuar con campos de fecha y selectores, garantizando una navegación fluida en campo.
+* **Motor PWA Robusto (Contexto Global):** Implementación de un "Recepcionista Global" (`PWAContext`) que atrapa el evento de instalación desde el milisegundo cero, garantizando que el botón de instalación siempre esté disponible cuando el navegador lo permita.
+* **UI Nativa (Scrollbars & Tap):** Diseño de barras de desplazamiento sutiles tipo Mac/App Nativa adaptables al modo oscuro, y eliminación del parpadeo azul nativo al tocar botones en pantallas táctiles (`-webkit-tap-highlight-color`).
+* **Modo Claro por Defecto:** Configuración centralizada para que la primera experiencia de usuario sea siempre en Modo Claro, independientemente de la configuración del sistema operativo.
 
 ---
 
@@ -27,6 +30,10 @@ El sistema implementa una seguridad estricta basada en el perfil del usuario, ah
 
 ## 🚀 Mejoras e Implementaciones Core
 
+### 🚧 Modo Mantenimiento Granular
+* **Control de Acceso Dinámico:** Nuevo panel en *Ajustes de Sistema* que permite al Developer o Admin activar un "Modo Mantenimiento" y elegir mediante interruptores (switches) qué roles específicos pueden o no acceder al sistema.
+* **Escudo Protector en Capa Base:** El componente de rutas protegidas lee la configuración en tiempo real y, si el usuario está bloqueado, despliega una pantalla de bloqueo absoluta obligando el cierre de sesión. Contiene una regla de "Inmunidad" inquebrantable para el rol Developer.
+
 ### 📈 Dashboards Analíticos de Alto Rendimiento
 
 * **Motor de Descarga Recursiva (Chunking):** Implementación de una función maestra que burla el límite de 1,000 registros por defecto de Supabase, solicitando bloques de datos dinámicos para garantizar que los KPIs gráficos muestren el **100% de la información histórica** sin colapsar el servidor.
@@ -37,6 +44,8 @@ El sistema implementa una seguridad estricta basada en el perfil del usuario, ah
 * **Categorización por Familias:** Selector de Tipo de Gasto organizado jerárquicamente (Gastos Adicionales, Maniobras y Ocupabilidad) mediante grupos visuales (`optgroup`).
 * **Filtro de Motivos Dinámicos:** Implementación de lógica dependiente donde el "Motivo del Gasto" se filtra en tiempo real según el Tipo de Gasto seleccionado, eliminando errores de registro.
 * **Reubicación de Área Atribuible:** Mejora de flujo que posiciona el centro de costo/área al inicio del detalle económico para un llenado más natural.
+* **Validación de Desfase de Facturas:** Tarjeta informativa dinámica y "peaje" de validación (Modal) que alerta al transportista si intenta registrar un gasto con más de 7 días de desfase respecto a la fecha de factura.
+* **Modales Perfectos (Teletransportación):** Uso de `createPortal` en React para renderizar modales de alerta (como el de desfase) en la raíz del DOM, evitando choques de jerarquía (z-index) con la cabecera de la plantilla.
 
 ### ⚖️ Flujo de Aprobación y Auditoría
 
@@ -70,10 +79,13 @@ Se utiliza la vista robusta `view_historial_general` y `view_solicitudes_operati
 
 ## 📂 Estructura de Archivos Clave
 
+* `/src/context/PWAContext.jsx`: Recepcionista global que atrapa y gestiona el evento de instalación de la PWA.
+* `/src/context/ThemeContext.jsx`: Gestor de estado visual, forzado a nacer en Modo Claro por defecto.
 * `/src/pages/Approvals.jsx`: Gestión de aprobaciones con captura de asunto de correo y validación técnica.
 * `/src/pages/Payments.jsx`: Centro de liquidación masiva con visualización de códigos SAP y picking.
 * `/src/pages/GeneralHistory.jsx`: Componente de auditoría global con filtros dinámicos y rangos de fecha.
-* `/src/pages/NewRequest.jsx`: Formulario inteligente con motivos dinámicos y tipos de gasto agrupados.
+* `/src/pages/NewRequest.jsx`: Formulario inteligente con motivos dinámicos, tipos de gasto agrupados y cálculo de desfase de factura.
+* `/src/components/layout/ProtectedLayout.jsx`: Contenedor principal y escudo protector que despliega la pantalla de Modo Mantenimiento.
 * `/src/services/requests.js`: Motor central de peticiones con lógica de RBAC para Pagadores y limpieza de filtros en memoria.
 * `/src/components/layout/Sidebar.jsx`: Menú lateral dinámico con control de accesos por rol y selector de apariencia simplificado (Dark/Light).
 
@@ -111,3 +123,6 @@ npm run dev
 3. **Auditoría y SAP:** Se incluyó la explicación del nuevo campo `asunto_correo` para aprobación y la visualización de datos técnicos (Picking/Posición) en la bandeja de pagos.
 4. **UX en Registro:** Se detalló la nueva estructura del formulario con **motivos dependientes** y tipos de gasto agrupados.
 5. **Limpieza Visual:** Se registró el cambio en el Sidebar para simplificar el selector de apariencia (eliminando el modo sistema) y la optimización Anti-Zoom para móviles.
+6. **PWA y Estilos Nativos:** Se estabilizó el Service Worker mediante un Contexto Global (`PWAContext`) para asegurar la instalación, se agregaron scrollbars personalizados tipo App y se forzó el Modo Claro inicial.
+7. **Regla de Desfase (7 días):** Se implementó una alerta visual y un modal de confirmación (usando `createPortal` para jerarquía perfecta) al intentar guardar facturas antiguas.
+8. **Modo Mantenimiento Activo:** Se creó un interruptor maestro y switches por rol en Ajustes de Sistema para restringir el acceso a la plataforma de forma granular (con el respectivo escudo en `ProtectedLayout`), sin afectar la cuenta del desarrollador.

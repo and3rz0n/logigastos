@@ -44,7 +44,28 @@ export const getSystemConfig = async () => {
     return data;
   } catch (error) {
     console.error('Error cargando configuración:', error);
-    return { longitud_picking: 8 }; 
+    // Agregamos los valores por defecto del mantenimiento por seguridad
+    return { 
+      longitud_picking: 8,
+      mantenimiento_activo: false,
+      roles_permitidos_mantenimiento: ['developer', 'admin']
+    }; 
+  }
+};
+
+export const updateMaintenanceConfig = async (isActivo, rolesArray) => {
+  try {
+    const { error } = await supabase
+      .from('configuracion_sistema')
+      .update({ 
+        mantenimiento_activo: isActivo,
+        roles_permitidos_mantenimiento: rolesArray
+      })
+      .eq('id', 1);
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    throw error;
   }
 };
 

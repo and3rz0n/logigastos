@@ -5,7 +5,7 @@ const ThemeContext = createContext({});
 export const useTheme = () => useContext(ThemeContext);
 
 export const ThemeProvider = ({ children }) => {
-  // Inicializamos el estado leyendo el localStorage o usando 'system' por defecto
+  // Inicializamos el estado leyendo el localStorage o usando 'light' por defecto
   const [theme, setTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('logigastos-theme');
@@ -13,7 +13,8 @@ export const ThemeProvider = ({ children }) => {
         return savedTheme;
       }
     }
-    return 'system';
+    // AQUÍ ESTÁ LA MAGIA: Forzamos el modo claro como predeterminado
+    return 'light'; 
   });
 
   useEffect(() => {
