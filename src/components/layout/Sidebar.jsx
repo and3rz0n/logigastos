@@ -291,7 +291,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
                 {isInstallable && (
                   <button
                     onClick={handleInstallClick}
-                    className="flex items-center gap-3 px-4 py-3 w-full text-sm font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 dark:text-white dark:bg-brand-600/40 dark:hover:bg-brand-500/50 dark:border-brand-500/50 rounded-xl transition-all outline-none"
+                    className="flex items-center gap-3 px-4 py-3 w-full text-sm font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 dark:bg-brand-900/30 dark:hover:bg-brand-900/50 dark:text-brand-300 dark:border-brand-700/50 rounded-xl transition-all outline-none"
                   >
                     <Download className="w-5 h-5 shrink-0" />
                     <span>Instalar Aplicación</span>
