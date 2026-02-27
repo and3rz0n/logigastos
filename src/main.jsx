@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { Toaster } from 'sonner'
 import App from './App.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
+import { PWAProvider } from './context/PWAContext.jsx' // <-- IMPORTAMOS EL RECEPCIONISTA
 import './index.css'
 
 // --- INICIO: Activación explícita del Service Worker (Motor PWA) ---
@@ -13,9 +14,11 @@ registerSW({ immediate: true })
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ThemeProvider>
-      <App />
-      {/* Sistema de Notificaciones Global (Toaster) */}
-      <Toaster position="top-center" richColors />
+      <PWAProvider> {/* <-- ENVOLVEMOS LA APP CON EL RECEPCIONISTA GLOBAL */}
+        <App />
+        {/* Sistema de Notificaciones Global (Toaster) */}
+        <Toaster position="top-center" richColors />
+      </PWAProvider>
     </ThemeProvider>
   </React.StrictMode>,
 )

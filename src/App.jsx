@@ -17,8 +17,6 @@ import Settings from './pages/Settings';
 // Importación del nuevo componente de Auditoría
 import GeneralHistory from './pages/GeneralHistory'; 
 
-import 'virtual:pwa-register';
-
 function App() {
   return (
     <AuthProvider>

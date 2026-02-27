@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { usePWA } from '../../context/PWAContext'; // <-- IMPORTAMOS EL RECEPCIONISTA GLOBAL
 import { cn } from '../../utils/cn';
 import { 
   LayoutDashboard, 
@@ -28,69 +29,16 @@ export function Sidebar({ isOpen, setIsOpen }) {
   const { theme, setTheme } = useTheme(); 
   const location = useLocation();
 
+  // --- CONECTAMOS CON EL RECEPCIONISTA PARA OBTENER LOS DATOS PWA ---
+  const { isInstallable, isIOS, isStandalone, handleInstallClick } = usePWA();
+
   const [isDashboardsOpen, setIsDashboardsOpen] = useState(false);
-  
-  // --- ESTADOS PARA PWA E INSTALACIÓN ---
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [isInstallable, setIsInstallable] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false); // Detectar si ya está instalada
 
   useEffect(() => {
     if (location.pathname.includes('/dashboard')) {
       setIsDashboardsOpen(true);
     }
   }, [location.pathname]);
-
-  // --- LÓGICA DE DETECCIÓN DE PWA E IOS ---
-  useEffect(() => {
-    // 1. Detectar si el usuario está en un dispositivo iOS (iPhone/iPad)
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(isIOSDevice);
-
-    // 2. Detectar si la app ya está instalada o ejecutándose en modo "Standalone"
-    const isRunningStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-    setIsStandalone(isRunningStandalone);
-
-    // 3. Escuchar el evento de instalación para PC y Android
-    const handleBeforeInstallPrompt = (e) => {
-      // Prevenir que Chrome muestre el mini-infobar automático
-      e.preventDefault();
-      // Guardar el evento para poder dispararlo luego con nuestro botón
-      setDeferredPrompt(e);
-      // Habilitar la visibilidad del botón de instalación
-      setIsInstallable(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    // 4. Limpieza de eventos
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    
-    // Mostrar el prompt nativo de instalación
-    deferredPrompt.prompt();
-    
-    // Esperar a que el usuario responda al prompt
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      console.log('El usuario aceptó la instalación');
-      // Una vez aceptado, no volverá a salir
-      setIsInstallable(false);
-    } else {
-      console.log('El usuario rechazó la instalación');
-    }
-    
-    // Limpiar el evento guardado
-    setDeferredPrompt(null);
-  };
 
   const userRole = profile?.rol || '';
   
@@ -270,7 +218,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
             {/* --- SECCIÓN DE INSTALACIÓN PWA (BOTÓN O TARJETA) --- */}
             {!isStandalone && (
               <>
-                {/* Botón para Android/PC (Se muestra solo si el evento beforeinstallprompt se disparó) */}
+                {/* Botón para Android/PC (Depende del Recepcionista) */}
                 {isInstallable && (
                   <button
                     onClick={handleInstallClick}
@@ -281,7 +229,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
                   </button>
                 )}
 
-                {/* Tarjeta Educativa para iOS (Se muestra solo en navegadores de dispositivos Apple) */}
+                {/* Tarjeta Educativa para iOS */}
                 {isIOS && !isInstallable && (
                   <div className="px-4 py-3 w-full text-xs text-gray-600 bg-gray-50 border border-gray-200 dark:text-gray-300 dark:bg-slate-800 dark:border-slate-700 rounded-xl">
                     <p className="font-bold text-gray-900 dark:text-white mb-1">Instala la App</p>
