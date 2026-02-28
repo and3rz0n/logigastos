@@ -1205,21 +1205,22 @@ function UsersManager({ currentUser }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      {/* AQUÍ ESTÁ EL CAMBIO: Se agregó flex-wrap y sm:flex-row para que baje en móviles */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h3 className="font-bold text-lg text-gray-900 dark:text-white">Directorio de Usuarios</h3>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-3">
             <Button 
                 variant={showInactives ? "default" : "outline"} 
                 onClick={() => setShowInactives(!showInactives)} 
-                className={cn("gap-2", showInactives && "bg-gray-800 text-white hover:bg-gray-900")}
+                className={cn("gap-2 w-full sm:w-auto", showInactives && "bg-gray-800 text-white hover:bg-gray-900")}
             >
                 {showInactives ? <FilterX className="w-4 h-4" /> : <Filter className="w-4 h-4" />}
                 {showInactives ? "Ver Activos" : "Ver Inactivos"}
             </Button>
-            <Button onClick={openNew} className="gap-2"><Plus className="w-4 h-4" /> Nuevo Usuario</Button>
+            <Button onClick={openNew} className="gap-2 w-full sm:w-auto whitespace-nowrap"><Plus className="w-4 h-4" /> Nuevo Usuario</Button>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 uppercase font-medium">
             <tr>
