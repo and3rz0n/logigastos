@@ -1505,3 +1505,88 @@ function TabButton({ active, onClick, icon: Icon, label }) {
     </button>
   );
 }
+
+// --- SUB-COMPONENTE: GESTOR MAESTRO SIMPLE (Canales, etc) ---
+function SimpleMasterManager({ table, title }) {
+  const [items, setItems] = useState([]);
+  const [formData, setFormData] = useState({ nombre: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [showInactives, setShowInactives] = useState(false);
+
+  useEffect(() => { loadItems(); }, [table]);
+
+  const loadItems = async () => {
+    const { data } = await supabase.from(table).select('*').order('nombre', { ascending: true });
+    setItems(data || []);
+  };
+
+  const handleSave = async () => {
+    if (!formData.nombre) return toast.error("El nombre es obligatorio");
+    if (editingId) {
+      const { error } = await supabase.from(table).update({ nombre: formData.nombre }).eq('id', editingId);
+      if (error) toast.error("Error al actualizar");
+      else { toast.success("Registro actualizado"); resetForm(); loadItems(); }
+    } else {
+      const { error } = await supabase.from(table).insert([{ nombre: formData.nombre, activo: true }]);
+      if (error) toast.error("Error al crear");
+      else { toast.success("Registro agregado"); resetForm(); loadItems(); }
+    }
+  };
+
+  const resetForm = () => { setFormData({ nombre: '' }); setEditingId(null); };
+
+  const toggleActive = async (id, currentStatus) => {
+    await supabase.from(table).update({ activo: !currentStatus }).eq('id', id);
+    loadItems();
+  };
+
+  const filteredItems = items.filter(i => showInactives ? !i.activo : i.activo);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-bold text-lg text-gray-900 dark:text-white">{title}</h3>
+        <Button 
+            variant={showInactives ? "default" : "outline"} 
+            size="sm"
+            onClick={() => setShowInactives(!showInactives)} 
+            className={cn("gap-2", showInactives && "bg-gray-800 text-white hover:bg-gray-900")}
+        >
+            {showInactives ? <FilterX className="w-4 h-4" /> : <Filter className="w-4 h-4" />}
+            {showInactives ? "Ver Activos" : "Ver Inactivos"}
+        </Button>
+      </div>
+      
+      <div className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col sm:flex-row gap-3 items-end">
+        <div className="flex-1 w-full">
+           <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nombre</label>
+           <Input placeholder="Ej. Moderno, Tradicional..." value={formData.nombre} onChange={e => setFormData({nombre: e.target.value})} />
+        </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+            {editingId && <Button variant="outline" onClick={resetForm}>Cancelar</Button>}
+            <Button onClick={handleSave} className="flex-1 sm:flex-none">
+                {editingId ? <Save className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                {editingId ? 'Guardar' : 'Agregar'}
+            </Button>
+        </div>
+      </div>
+
+      <div className="space-y-2 mt-4">
+        {filteredItems.map(item => (
+        <div key={item.id} className={cn("flex items-center justify-between p-3 rounded-lg border transition-all", item.activo ? "bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700" : "bg-gray-50 dark:bg-slate-900/20 border-gray-100 dark:border-slate-700 border-dashed opacity-70")}>
+            <span className={cn("font-bold text-sm", item.activo ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400 line-through")}>{item.nombre}</span>
+            <div className="flex items-center gap-2">
+                <button onClick={() => { setFormData({nombre: item.nombre}); setEditingId(item.id); }} className="p-1.5 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-700 dark:hover:text-white transition-colors">
+                    <Edit2 className="w-4 h-4" />
+                </button>
+                <button onClick={() => toggleActive(item.id, item.activo)} className={cn("text-xs font-bold px-2 py-1.5 rounded transition-colors", item.activo ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-green-100 dark:hover:bg-green-900/30 hover:text-green-700")}>
+                    {item.activo ? "ACTIVO" : "INACTIVO"}
+                </button>
+            </div>
+        </div>
+        ))}
+        {filteredItems.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No hay registros para mostrar.</p>}
+      </div>
+    </div>
+  );
+}
