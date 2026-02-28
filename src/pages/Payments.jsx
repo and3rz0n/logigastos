@@ -18,7 +18,7 @@ import {
   AlertCircle,
   Receipt,
   ShieldCheck,
-  ChevronLeft
+  ChevronLeft,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -56,19 +56,34 @@ export default function Payments() {
   // Carga de datos reactiva a cambios de pestaña, página o filtros globales
   useEffect(() => {
     loadData();
-  }, [activeTab, currentPagePending, currentPageHistory, searchTerm, dateFrom, dateTo]);
+  }, [
+    activeTab,
+    currentPagePending,
+    currentPageHistory,
+    searchTerm,
+    dateFrom,
+    dateTo,
+  ]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       if (activeTab === "pending") {
         // Búsqueda global y paginación en el servidor para Pendientes
-        const { data, totalCount } = await getApprovedForPayment(currentPagePending, searchTerm);
+        const { data, totalCount } = await getApprovedForPayment(
+          currentPagePending,
+          searchTerm,
+        );
         setPending(data || []);
         setTotalCountPending(totalCount || 0);
       } else {
         // Búsqueda global y paginación en el servidor para Historial (Incluye filtros de fecha)
-        const { data, totalCount } = await getPaidHistory(currentPageHistory, searchTerm, dateFrom, dateTo);
+        const { data, totalCount } = await getPaidHistory(
+          currentPageHistory,
+          searchTerm,
+          dateFrom,
+          dateTo,
+        );
         setHistory(data || []);
         setTotalCountHistory(totalCount || 0);
       }
@@ -83,7 +98,9 @@ export default function Payments() {
   const handleProcessPayments = async () => {
     try {
       await processBatchPayments(selectedIds, user.id);
-      toast.success(`¡Pago procesado correctamente! (${selectedIds.length} solicitudes)`);
+      toast.success(
+        `¡Pago procesado correctamente! (${selectedIds.length} solicitudes)`,
+      );
       setIsConfirmModalOpen(false);
       setSelectedIds([]);
       loadData();
@@ -107,9 +124,12 @@ export default function Payments() {
   };
 
   const currentList = activeTab === "pending" ? pending : history;
-  const currentTotal = activeTab === "pending" ? totalCountPending : totalCountHistory;
-  const currentPage = activeTab === "pending" ? currentPagePending : currentPageHistory;
-  const setCurrentPage = activeTab === "pending" ? setCurrentPagePending : setCurrentPageHistory;
+  const currentTotal =
+    activeTab === "pending" ? totalCountPending : totalCountHistory;
+  const currentPage =
+    activeTab === "pending" ? currentPagePending : currentPageHistory;
+  const setCurrentPage =
+    activeTab === "pending" ? setCurrentPagePending : setCurrentPageHistory;
   const totalPages = Math.ceil(currentTotal / 10);
 
   const totalSelectedMoney = pending
@@ -121,7 +141,8 @@ export default function Payments() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-sans flex items-center gap-2">
-            <DollarSign className="text-amber-600 dark:text-amber-500 w-7 h-7" /> Bandeja de Pagos
+            <DollarSign className="text-amber-600 dark:text-amber-500 w-7 h-7" />{" "}
+            Bandeja de Pagos
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm">
             Gestiona y liquida las solicitudes aprobadas.
@@ -180,16 +201,16 @@ export default function Payments() {
             />
           </div>
         </div>
-        
+
         {activeTab === "history" && (
           <div className="w-full lg:w-auto flex gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1">
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1 truncate">
                 Desde
               </label>
               <Input
                 type="date"
-                className="dark:text-white h-12 text-base"
+                className="dark:text-white h-12 text-base w-full"
                 value={dateFrom}
                 onChange={(e) => {
                   setDateFrom(e.target.value);
@@ -197,13 +218,13 @@ export default function Payments() {
                 }}
               />
             </div>
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1">
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1 truncate">
                 Hasta
               </label>
               <Input
                 type="date"
-                className="dark:text-white h-12 text-base"
+                className="dark:text-white h-12 text-base w-full"
                 value={dateTo}
                 onChange={(e) => {
                   setDateTo(e.target.value);
@@ -213,7 +234,7 @@ export default function Payments() {
             </div>
           </div>
         )}
-        
+
         {(searchTerm || dateFrom || dateTo) && (
           <Button
             variant="secondary"
@@ -238,7 +259,9 @@ export default function Payments() {
       ) : currentList.length === 0 ? (
         <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border-2 border-dashed border-gray-200 dark:border-slate-700">
           <AlertCircle className="w-12 h-12 text-gray-300 dark:text-slate-700 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Sin resultados</h3>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            Sin resultados
+          </h3>
           <p className="text-gray-500 dark:text-gray-400">
             No se encontraron registros con los criterios actuales.
           </p>
@@ -273,8 +296,12 @@ export default function Payments() {
           {/* Controles de Paginación Global */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 bg-gray-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-800">
             <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-              Página <span className="text-brand-700 dark:text-brand-400 font-bold">{currentPage}</span> de {totalPages || 1} 
-              <span className="mx-2">•</span> 
+              Página{" "}
+              <span className="text-brand-700 dark:text-brand-400 font-bold">
+                {currentPage}
+              </span>{" "}
+              de {totalPages || 1}
+              <span className="mx-2">•</span>
               Total: <span className="font-bold">{currentTotal}</span> registros
             </div>
             <div className="flex items-center gap-2">
@@ -282,7 +309,7 @@ export default function Payments() {
                 variant="outline"
                 size="sm"
                 className="h-10 bg-white dark:bg-slate-800"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1 || loading}
               >
                 <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
@@ -291,7 +318,9 @@ export default function Payments() {
                 variant="outline"
                 size="sm"
                 className="h-10 bg-white dark:bg-slate-800"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
                 disabled={currentPage === totalPages || loading}
               >
                 Siguiente <ChevronRight className="w-4 h-4 ml-1" />
@@ -312,7 +341,10 @@ export default function Payments() {
                 {selectedIds.length} Seleccionados
               </p>
               <p className="text-xl font-bold">
-                Total: S/ {totalSelectedMoney.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                Total: S/{" "}
+                {totalSelectedMoney.toLocaleString("es-PE", {
+                  minimumFractionDigits: 2,
+                })}
               </p>
             </div>
           </div>
@@ -332,19 +364,34 @@ export default function Payments() {
       >
         <div className="space-y-4 pt-2">
           <p className="text-gray-600 dark:text-gray-300 text-sm">
-            Estás por marcar como <span className="font-bold text-green-600 dark:text-green-400 text-base">PAGADO</span> un total de <strong>{selectedIds.length} solicitudes</strong>.
+            Estás por marcar como{" "}
+            <span className="font-bold text-green-600 dark:text-green-400 text-base">
+              PAGADO
+            </span>{" "}
+            un total de <strong>{selectedIds.length} solicitudes</strong>.
           </p>
           <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border dark:border-slate-700">
             <div className="flex justify-between text-sm mb-1 dark:text-gray-400">
               <span>Monto Total a Liquidar:</span>
               <span className="font-bold text-lg text-gray-900 dark:text-white">
-                S/ {totalSelectedMoney.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                S/{" "}
+                {totalSelectedMoney.toLocaleString("es-PE", {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             </div>
           </div>
           <div className="flex gap-3 pt-4">
-            <Button variant="outline" className="flex-1" onClick={() => setIsConfirmModalOpen(false)}>Cancelar</Button>
-            <Button className="flex-1" onClick={handleProcessPayments}>Confirmar Pago</Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setIsConfirmModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button className="flex-1" onClick={handleProcessPayments}>
+              Confirmar Pago
+            </Button>
           </div>
         </div>
       </Modal>
@@ -356,15 +403,31 @@ function PaymentCard({ item, isPending, isSelected, onToggle }) {
   const safeFormatDate = (dateStr, includeTime = false) => {
     if (!dateStr) return null;
     try {
-      const cleanStr = dateStr.includes(" ") ? dateStr.replace(" ", "T") : dateStr;
+      const cleanStr = dateStr.includes(" ")
+        ? dateStr.replace(" ", "T")
+        : dateStr;
       const d = new Date(cleanStr);
       if (isNaN(d.getTime())) return null;
-      return d.toLocaleDateString("es-PE", includeTime ? { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "short" });
-    } catch (e) { return null; }
+      return d.toLocaleDateString(
+        "es-PE",
+        includeTime
+          ? {
+              day: "2-digit",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            }
+          : { day: "2-digit", month: "short" },
+      );
+    } catch (e) {
+      return null;
+    }
   };
 
   const fSolicitud = safeFormatDate(item.created_at) || "---";
-  const fFactura = item.fecha_factura ? safeFormatDate(item.fecha_factura + "T00:00:00") : "---";
+  const fFactura = item.fecha_factura
+    ? safeFormatDate(item.fecha_factura + "T00:00:00")
+    : "---";
   const fResolucion = safeFormatDate(item.updated_at, true) || "---";
 
   return (
@@ -381,7 +444,9 @@ function PaymentCard({ item, isPending, isSelected, onToggle }) {
         <div
           className={cn(
             "w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors",
-            isSelected ? "bg-brand-500 border-brand-500" : "bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600",
+            isSelected
+              ? "bg-brand-500 border-brand-500"
+              : "bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600",
           )}
         >
           {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
@@ -399,56 +464,85 @@ function PaymentCard({ item, isPending, isSelected, onToggle }) {
                 {item.nombre_transportista}
               </h4>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Sol: {fSolicitud}</span>
-                <span className="flex items-center gap-1 font-semibold text-gray-600 dark:text-gray-300"><Receipt className="w-3 h-3" /> Fac: {fFactura}</span>
-                <span className={cn("flex items-center gap-1 font-bold", isPending ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400")}>
-                  <Clock className="w-3 h-3" /> {isPending ? "Aprobado el: " : "Pagado el: "} {fResolucion}
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" /> Sol: {fSolicitud}
+                </span>
+                <span className="flex items-center gap-1 font-semibold text-gray-600 dark:text-gray-300">
+                  <Receipt className="w-3 h-3" /> Fac: {fFactura}
+                </span>
+                <span
+                  className={cn(
+                    "flex items-center gap-1 font-bold",
+                    isPending
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-blue-600 dark:text-blue-400",
+                  )}
+                >
+                  <Clock className="w-3 h-3" />{" "}
+                  {isPending ? "Aprobado el: " : "Pagado el: "} {fResolucion}
                 </span>
               </div>
             </div>
           </div>
           <div className="text-right">
-            <span className="block text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">Monto</span>
-            <span className="text-lg font-black text-gray-900 dark:text-white">S/ {item.total_gasto?.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
+            <span className="block text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">
+              Monto
+            </span>
+            <span className="text-lg font-black text-gray-900 dark:text-white">
+              S/{" "}
+              {item.total_gasto?.toLocaleString("es-PE", {
+                minimumFractionDigits: 2,
+              })}
+            </span>
           </div>
         </div>
 
         {/* Sección de Datos Técnicos Rediseñada */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-50 dark:border-slate-700/50">
-          
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Vehículo:</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">
+                Vehículo:
+              </span>
               <span className="font-mono font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/20 px-1.5 py-0.5 rounded border border-brand-100 dark:border-brand-800 text-xs">
-                  {item.placa_vehiculo || '---'}
+                {item.placa_vehiculo || "---"}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Área:</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">
+                Área:
+              </span>
               <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-gray-400 dark:text-gray-500" /> {item.nombre_area || '---'}
+                <MapPin className="w-3 h-3 text-gray-400 dark:text-gray-500" />{" "}
+                {item.nombre_area || "---"}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Picking:</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">
+                Picking:
+              </span>
               <span className="text-xs font-mono font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
-                {item.nro_transporte_sap || '---'}
+                {item.nro_transporte_sap || "---"}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Posición:</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">
+                Posición:
+              </span>
               <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-400">
-                {item.sap_posicion || '---'}
+                {item.sap_posicion || "---"}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">Clase:</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">
+                Clase:
+              </span>
               <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-400">
-                {item.sap_clase_condicion || '---'}
+                {item.sap_clase_condicion || "---"}
               </span>
             </div>
           </div>
@@ -456,10 +550,16 @@ function PaymentCard({ item, isPending, isSelected, onToggle }) {
           <div className="flex justify-start lg:justify-end items-center shrink-0">
             {isPending ? (
               <div className="flex flex-col items-start lg:items-end">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Aprobador Asignado: {item.nombre_aprobador_asignado}</span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">
+                  Aprobador Asignado: {item.nombre_aprobador_asignado}
+                </span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-full border border-green-100 dark:border-green-800">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  Aprobado por {item.nombre_aprobador_real && item.nombre_aprobador_real !== 'N/A' ? item.nombre_aprobador_real : item.nombre_aprobador_asignado}
+                  Aprobado por{" "}
+                  {item.nombre_aprobador_real &&
+                  item.nombre_aprobador_real !== "N/A"
+                    ? item.nombre_aprobador_real
+                    : item.nombre_aprobador_asignado}
                 </span>
               </div>
             ) : (

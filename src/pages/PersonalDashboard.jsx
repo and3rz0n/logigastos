@@ -189,36 +189,36 @@ export default function PersonalDashboard() {
 
           <div className="hidden lg:block w-px bg-gray-200 dark:bg-slate-700 my-1 shrink-0"></div>
 
-          <div className="flex-1 flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-brand-600 dark:text-brand-400 uppercase mb-1">
+          <div className="flex-1 flex gap-2 w-full">
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-[10px] sm:text-xs font-bold text-brand-600 dark:text-brand-400 uppercase mb-1 truncate">
                 F. Registro (Inicio)
               </label>
-              <Input type="date" className="h-11 dark:text-white text-base" value={fechaInicioReg} onChange={(e) => setFechaInicioReg(e.target.value)} />
+              <Input type="date" className="h-11 dark:text-white text-base w-full" value={fechaInicioReg} onChange={(e) => setFechaInicioReg(e.target.value)} />
             </div>
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-brand-600 dark:text-brand-400 uppercase mb-1">
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-[10px] sm:text-xs font-bold text-brand-600 dark:text-brand-400 uppercase mb-1 truncate">
                 F. Registro (Fin)
               </label>
-              <Input type="date" className="h-11 dark:text-white text-base" value={fechaFinReg} onChange={(e) => setFechaFinReg(e.target.value)} />
+              <Input type="date" className="h-11 dark:text-white text-base w-full" value={fechaFinReg} onChange={(e) => setFechaFinReg(e.target.value)} />
             </div>
           </div>
         </div>
 
         {/* CÁPSULA 2: CONTABILIDAD (Basado en Fecha de Factura) */}
         <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col sm:flex-row gap-4 items-end">
-          <div className="flex-1 flex flex-col sm:flex-row gap-4 w-full">
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1 flex items-center gap-1">
-                <Receipt className="w-3 h-3" /> F. Factura (Inicio)
+          <div className="flex-1 flex gap-2 w-full">
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1 flex items-center gap-1 truncate">
+                <Receipt className="w-3 h-3 shrink-0" /> F. Fac (Inicio)
               </label>
-              <Input type="date" className="h-11 dark:text-white text-base" value={fechaInicioFac} onChange={(e) => setFechaInicioFac(e.target.value)} />
+              <Input type="date" className="h-11 dark:text-white text-base w-full" value={fechaInicioFac} onChange={(e) => setFechaInicioFac(e.target.value)} />
             </div>
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1 flex items-center gap-1">
-                <Receipt className="w-3 h-3" /> F. Factura (Fin)
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1 flex items-center gap-1 truncate">
+                <Receipt className="w-3 h-3 shrink-0" /> F. Fac (Fin)
               </label>
-              <Input type="date" className="h-11 dark:text-white text-base" value={fechaFinFac} onChange={(e) => setFechaFinFac(e.target.value)} />
+              <Input type="date" className="h-11 dark:text-white text-base w-full" value={fechaFinFac} onChange={(e) => setFechaFinFac(e.target.value)} />
             </div>
           </div>
           

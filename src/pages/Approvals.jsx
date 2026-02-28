@@ -280,7 +280,23 @@ function ApprovalCard({ req, onAction }) {
   const transportista = req.nombre_transportista || 'Transportista Desconocido';
   const placa = req.placa_vehiculo || '---';
   const capacidad = req.capacidad_vehiculo || 0;
-  const fecha = new Date(req.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+  
+  // Cálculo de fechas
+  const fechaRegistro = new Date(req.created_at);
+  const fechaFormateada = fechaRegistro.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+  
+  let fechaFacturaFormateada = '---';
+  let diasDesfase = 0;
+  
+  if (req.fecha_factura) {
+    // Aseguramos que la fecha se tome correctamente compensando zonas horarias (forzando T00:00:00)
+    const fechaFactura = new Date(req.fecha_factura + "T00:00:00");
+    fechaFacturaFormateada = fechaFactura.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+    
+    // Calculamos la diferencia en días
+    const diffTime = fechaRegistro - fechaFactura;
+    diasDesfase = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  }
 
   const isFF = req.tipo_gasto === 'Falso Flete';
   const isCM = req.tipo_gasto === 'Carga < al % mínimo';
@@ -304,7 +320,20 @@ function ApprovalCard({ req, onAction }) {
             <h3 className="font-bold text-gray-900 dark:text-white text-lg leading-tight">{transportista}</h3>
             <div className="text-xs flex flex-wrap items-center gap-2 mt-1">
               <span className="bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-gray-200 dark:border-slate-600 font-mono font-bold text-gray-700 dark:text-gray-300">{placa}</span>
-              <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400"><Clock className="w-3 h-3" /> {fecha}</span>
+              <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                <Clock className="w-3 h-3" /> Registrado: {fechaFormateada}
+              </span>
+              <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                <FileText className="w-3 h-3" /> Factura: {fechaFacturaFormateada}
+              </span>
+              
+              {/* Etiqueta de Desfase de Factura */}
+              {diasDesfase > 7 && (
+                <span className="flex items-center gap-1 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded border border-red-200 dark:border-red-800/50 font-bold animate-in fade-in">
+                  <AlertTriangle className="w-3 h-3" /> {diasDesfase} días desfase
+                </span>
+              )}
+
               <span className="flex items-center gap-1 text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 px-2 py-0.5 rounded border border-brand-100 dark:border-brand-800/50 font-medium">
                   <User className="w-3 h-3" /> Asignado a: {req.nombre_aprobador_asignado}
               </span>
@@ -312,7 +341,7 @@ function ApprovalCard({ req, onAction }) {
           </div>
         </div>
         
-        <div className="text-right bg-white dark:bg-slate-800 px-4 py-2 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
+        <div className="text-right bg-white dark:bg-slate-800 px-4 py-2 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm shrink-0">
           <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5">Monto Solicitado</div>
           <div className="font-bold text-brand-700 dark:text-brand-400 text-2xl flex items-center justify-end">
             <span className="text-sm mr-1 mt-1 text-gray-400 dark:text-gray-500">S/</span>
@@ -362,9 +391,9 @@ function ApprovalCard({ req, onAction }) {
            </div>
         </div>
 
-        <div className="md:col-span-4 space-y-4 border-l border-gray-100 dark:border-slate-700 pl-0 md:pl-6 flex flex-col justify-between">
-           <div>
-               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Datos Operativos</p>
+        <div className="md:col-span-4 border-l-0 md:border-l border-gray-100 dark:border-slate-700 pl-0 md:pl-6 flex flex-col justify-between">
+           <div className="space-y-4">
+               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 hidden md:block">Datos Operativos</p>
                <div className="space-y-3 text-sm">
                   <div className="flex items-center justify-between">
                      <span className="text-gray-500 dark:text-gray-400 flex items-center gap-2"><MapPin className="w-4 h-4" /> Zona</span>
@@ -387,18 +416,18 @@ function ApprovalCard({ req, onAction }) {
                </div>
            </div>
            
-           {/* NUEVO: Fila del Motivo del Gasto */}
-           <div className="flex items-start justify-between gap-2 mt-2 pt-3 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/30 -mx-4 px-4 sm:mx-0 sm:px-2 rounded-lg">
-               <span className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase flex items-center gap-1 shrink-0 mt-0.5">
+           {/* Fila del Motivo del Gasto (Mejorada) */}
+           <div className="flex items-center justify-between gap-2 mt-4 p-3 bg-gray-50 dark:bg-slate-700/30 rounded-xl border border-gray-100 dark:border-slate-700">
+               <span className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase flex items-center gap-1 shrink-0">
                    <Info className="w-3.5 h-3.5" /> Motivo:
                </span>
-               <span className="font-medium text-gray-900 dark:text-white text-sm text-right leading-tight italic">
+               <span className="font-medium text-gray-900 dark:text-white text-sm text-right leading-tight italic break-words">
                    {req.motivo_gasto || 'No especificado'}
                </span>
            </div>
         </div>
 
-        <div className="md:col-span-3 flex flex-col justify-center gap-3 border-l border-gray-100 dark:border-slate-700 pl-0 md:pl-6">
+        <div className="md:col-span-3 flex flex-col justify-center gap-3 border-l-0 md:border-l border-gray-100 dark:border-slate-700 pl-0 md:pl-6 pt-4 md:pt-0 mt-4 md:mt-0 border-t md:border-t-0">
           <Button 
             onClick={() => onAction(req.id, 'approve')}
             className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md shadow-green-600/20 h-12 text-sm font-bold"

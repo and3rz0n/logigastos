@@ -572,7 +572,7 @@ export default function NewRequest() {
               <label className="text-sm font-medium dark:text-gray-300">
                 Fecha Factura
               </label>
-              <Input type="date" {...register("fecha", { required: true })} />
+              <Input type="date" className="w-full" {...register("fecha", { required: true })} />
             </div>
 
             {/* TARJETA INFORMATIVA DE DESFASE (NUEVA) */}
