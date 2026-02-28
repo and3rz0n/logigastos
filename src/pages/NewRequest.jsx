@@ -568,13 +568,13 @@ export default function NewRequest() {
               </select>
             </div>
 
-            <div className="space-y-2 w-full min-w-[130px]">
+            <div className="space-y-2 min-w-0">
               <label className="text-sm font-medium dark:text-gray-300">
                 Fecha Factura
               </label>
               <Input 
                 type="date" 
-                className="w-full text-sm dark:text-white" 
+                className="w-full text-sm dark:text-white appearance-none min-w-0" 
                 {...register("fecha", { required: true })} 
               />
             </div>
