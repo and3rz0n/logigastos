@@ -568,11 +568,15 @@ export default function NewRequest() {
               </select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 w-full min-w-[130px]">
               <label className="text-sm font-medium dark:text-gray-300">
                 Fecha Factura
               </label>
-              <Input type="date" className="w-full" {...register("fecha", { required: true })} />
+              <Input 
+                type="date" 
+                className="w-full text-sm dark:text-white" 
+                {...register("fecha", { required: true })} 
+              />
             </div>
 
             {/* TARJETA INFORMATIVA DE DESFASE (NUEVA) */}

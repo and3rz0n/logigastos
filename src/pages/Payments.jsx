@@ -203,28 +203,23 @@ export default function Payments() {
         </div>
 
         {activeTab === "history" && (
-          <div className="w-full lg:w-auto flex gap-2">
-            <div className="flex-1 min-w-[130px]">
-              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1 truncate">
-                Desde
-              </label>
+          <div className="w-full lg:w-auto flex-1 min-w-[280px] space-y-2">
+            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase ml-1">
+              Rango de Búsqueda
+            </label>
+            <div className="flex gap-2">
               <Input
                 type="date"
-                className="dark:text-white h-12 text-base w-full"
+                className="h-12 text-sm dark:text-white flex-1 min-w-[130px]"
                 value={dateFrom}
                 onChange={(e) => {
                   setDateFrom(e.target.value);
                   setCurrentPageHistory(1);
                 }}
               />
-            </div>
-            <div className="flex-1 min-w-[130px]">
-              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1 truncate">
-                Hasta
-              </label>
               <Input
                 type="date"
-                className="dark:text-white h-12 text-base w-full"
+                className="h-12 text-sm dark:text-white flex-1 min-w-[130px]"
                 value={dateTo}
                 onChange={(e) => {
                   setDateTo(e.target.value);
