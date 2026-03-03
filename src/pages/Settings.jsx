@@ -110,12 +110,22 @@ function ClientesManager() {
     setLoading(false);
   };
 
-  const handleSave = async () => {
+    const handleSave = async () => {
     if (!formData.codigo_destinatario || !formData.nombre_destinatario || !formData.canal) {
       return toast.error("El Código, Nombre y Canal son obligatorios.");
     }
     try {
-      await saveDestinatario({ ...formData, id: editingItem?.id });
+      // CORRECCIÓN: Preparamos el paquete de datos base
+      const payload = { ...formData };
+      
+      // SOLO agregamos el ID al paquete si estamos editando. 
+      // Si es nuevo, NO enviamos el campo 'id' para dejar que Supabase cree el UUID automáticamente.
+      if (editingItem) {
+        payload.id = editingItem.id;
+      }
+
+      await saveDestinatario(payload);
+      
       toast.success(editingItem ? "Cliente actualizado" : "Cliente registrado");
       setIsModalOpen(false);
       loadData();
@@ -123,6 +133,7 @@ function ClientesManager() {
       toast.error("Error al guardar el cliente");
     }
   };
+
 
   const openNew = () => {
     setEditingItem(null);
