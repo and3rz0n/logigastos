@@ -722,17 +722,18 @@ export default function NewRequest() {
                     ))}
                   </select>
                 </div>
-                <div className="space-y-2">
+                                <div className="space-y-2">
                   <label className="text-sm font-medium dark:text-gray-300">
                     Volumen (m³)
                   </label>
                   <Input
                     type="number"
-                    step="0.01"
-                    placeholder="0.00"
+                    step="0.001"
+                    placeholder="0.000"
                     {...register("volumen")}
                   />
                 </div>
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium dark:text-gray-300">
                     Tarifa Pactada (S/)
@@ -749,17 +750,18 @@ export default function NewRequest() {
 
             {tipoGasto === "Carga < al % mínimo" && (
               <>
-                <div className="space-y-2">
+                                <div className="space-y-2">
                   <label className="text-sm font-medium dark:text-gray-300">
                     Volumen Cargado Real (m³)
                   </label>
                   <Input
                     type="number"
-                    step="0.01"
-                    placeholder="0.00"
+                    step="0.001"
+                    placeholder="0.000"
                     {...register("volumen")}
                   />
                 </div>
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium dark:text-gray-300">
                     Tarifa (S/)
