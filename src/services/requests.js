@@ -600,7 +600,7 @@ export const processBatchPayments = async (requestIds, currentUserId) => {
 };
 
 // --- HISTORIAL GENERAL (MASTER) ---
-export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm = "", filters = {}) => {
+export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm = "", filters = {}, userProfile = null) => {
   try {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
@@ -608,6 +608,11 @@ export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm 
     let query = supabase
       .from('view_historial_general')
       .select('*', { count: 'exact' });
+
+    // EL FILTRO INQUEBRANTABLE: Si es aprobador, solo ve sus propios registros
+    if (userProfile?.rol === 'aprobador') {
+      query = query.eq('nombre_solicitante', userProfile.nombre_completo);
+    }
 
     if (searchTerm) {
       query = query.or(`nro_transporte.ilike.%${searchTerm}%,nombre_proveedor.ilike.%${searchTerm}%,placa_asociada.ilike.%${searchTerm}%`);
@@ -656,9 +661,14 @@ export const getGeneralHistoryData = async (page = 1, pageSize = 50, searchTerm 
   }
 };
 
-export const getAllGeneralHistoryDataFiltered = async (searchTerm = "", filters = {}) => {
+export const getAllGeneralHistoryDataFiltered = async (searchTerm = "", filters = {}, userProfile = null) => {
   try {
     let query = supabase.from('view_historial_general').select('*');
+
+    // EL FILTRO INQUEBRANTABLE PARA EL EXCEL: Mismo blindaje
+    if (userProfile?.rol === 'aprobador') {
+      query = query.eq('nombre_solicitante', userProfile.nombre_completo);
+    }
 
     if (searchTerm) {
       query = query.or(`nro_transporte.ilike.%${searchTerm}%,nombre_proveedor.ilike.%${searchTerm}%,placa_asociada.ilike.%${searchTerm}%`);

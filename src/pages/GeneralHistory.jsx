@@ -74,7 +74,8 @@ export default function GeneralHistory() {
 
   const loadHistory = async () => {
     setLoading(true);
-    const { data: history, totalCount: total } = await getGeneralHistoryData(currentPage, pageSize, searchTerm, filters);
+    // Le agregamos "profile" al final para que el motor sepa quién busca
+    const { data: history, totalCount: total } = await getGeneralHistoryData(currentPage, pageSize, searchTerm, filters, profile);
     setData(history);
     setTotalCount(total);
     setLoading(false);
@@ -87,7 +88,8 @@ export default function GeneralHistory() {
       const hasActiveFilters = searchTerm !== "" || Object.values(filters).some(v => v !== "all" && v !== "");
 
       if (hasActiveFilters) {
-        dataToExport = await getAllGeneralHistoryDataFiltered(searchTerm, filters);
+        // También le pasamos el "profile" al exportar filtrado
+        dataToExport = await getAllGeneralHistoryDataFiltered(searchTerm, filters, profile);
       } else {
         dataToExport = data;
       }

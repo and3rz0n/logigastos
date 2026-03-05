@@ -56,7 +56,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
   const canApprove = isAprobador || isAdminOrDev;
   const canManagePayments = isPagador || isAdminOrDev;
 
-  const canSeeHistory = isAdminOrDev || isPagador;
+  const canSeeHistory = isAdminOrDev || isPagador || isAprobador;
 
   const toggleTheme = () => {
     setTheme(theme === "light" ? "dark" : "light");
