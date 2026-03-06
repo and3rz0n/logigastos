@@ -592,7 +592,7 @@ function SapAccountManager() {
                             <table className="w-full text-sm text-left">
                               <thead className="bg-gray-50/50 dark:bg-slate-900/20 text-gray-400 dark:text-gray-500 uppercase text-[10px] font-bold">
                                 <tr>
-                                  <th className="px-4 py-2 w-1/3">Motivo (Nivel 3)</th>
+                                  <th className="px-4 py-2 w-1/3">Motivo</th>
                                   <th className="px-4 py-2">Posición SAP</th>
                                   <th className="px-4 py-2">Clase Condición</th>
                                   <th className="px-4 py-2">Tipo Cuenta</th>
