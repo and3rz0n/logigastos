@@ -344,22 +344,63 @@ function ClientesManager() {
   );
 }
 
-// --- SUB-COMPONENTE: GESTIÓN DE MAPEO SAP (MODAL EN DOS PASOS) ---
+// --- SUB-COMPONENTE: GESTIÓN DE MAPEO SAP (MODAL EN DOS PASOS Y 3 NIVELES) ---
 function SapAccountManager() {
   const [mappings, setMappings] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showInactives, setShowInactives] = useState(false);
   
-  // Estados para el Modal de Dos Pasos
   const [step, setStep] = useState(1);
   const [isProcessingMotivo, setIsProcessingMotivo] = useState(false);
-  const tiposGasto = ['General', 'Falso Flete', 'Gasto Adicional', 'Último Punto', 'Zona rígida', 'Maniobras', 'Carga < al % mínimo'];
+
+  // NUEVA ESTRUCTURA DE 3 NIVELES (Basada en tu formulario real)
+  const estructuraJerarquica = {
+    "1. Gastos Adicionales": [
+      "1.1. Falso Flete",
+      "1.2. Gasto Adicional",
+      "1.3. Último Punto",
+      "1.4. Zona rígida"
+    ],
+    "2. Maniobras": [
+      "2.1. Maniobras"
+    ],
+    "3. Ocupabilidad": [
+      "3.1. Carga < al % mínimo"
+    ]
+  };
+
+  // Convertimos el Nivel 2 que viene de BD a su equivalente en el nuevo menú
+  const mapearTipoGastoHaciaNuevo = (tipoBD) => {
+    const mapa = {
+      'Falso Flete': '1.1. Falso Flete',
+      'Gasto Adicional': '1.2. Gasto Adicional',
+      'Último Punto': '1.3. Último Punto',
+      'Zona rígida': '1.4. Zona rígida',
+      'Maniobras': '2.1. Maniobras',
+      'Carga < al % mínimo': '3.1. Carga < al % mínimo'
+    };
+    return mapa[tipoBD] || tipoBD;
+  };
+
+  // Convertimos lo que elige el usuario en el modal a lo que guarda la BD (Nivel 2 original)
+  const mapearNuevoHaciaTipoGasto = (tipoNuevo) => {
+    const mapa = {
+      '1.1. Falso Flete': 'Falso Flete',
+      '1.2. Gasto Adicional': 'Gasto Adicional',
+      '1.3. Último Punto': 'Último Punto',
+      '1.4. Zona rígida': 'Zona rígida',
+      '2.1. Maniobras': 'Maniobras',
+      '3.1. Carga < al % mínimo': 'Carga < al % mínimo'
+    };
+    return mapa[tipoNuevo] || tipoNuevo;
+  };
 
   const [formData, setFormData] = useState({ 
     id: null, 
     motivo_id: '', 
     motivo_nombre: '', 
-    tipo_gasto: 'General', 
+    categoria_principal: '1. Gastos Adicionales', // Nivel 1 (UI)
+    tipo_gasto: '1.1. Falso Flete', // Nivel 2 (UI)
     tipo_posicion: '', 
     clase_condicion: '', 
     cuenta_contable: '' 
@@ -369,7 +410,10 @@ function SapAccountManager() {
 
   const loadData = async () => {
     const data = await getSapMappings();
-    const sortedData = (data || []).sort((a, b) => {
+    // Filtramos los 'Histórico Antiguo' para no ensuciar la nueva vista
+    const dataLimpia = (data || []).filter(m => m.motivo?.tipo_gasto !== 'Histórico Antiguo');
+    
+    const sortedData = dataLimpia.sort((a, b) => {
       const nombreA = a.motivo?.nombre || '';
       const nombreB = b.motivo?.nombre || '';
       return nombreA.localeCompare(nombreB, 'es');
@@ -377,20 +421,21 @@ function SapAccountManager() {
     setMappings(sortedData);
   };
 
-  // ACCIÓN DE PASO 1: Procesar Motivo y avanzar
   const handleNextStep = async () => {
     if (!formData.motivo_nombre.trim()) return toast.error("Ingresa el nombre del motivo");
     
     setIsProcessingMotivo(true);
     try {
-       // Habla con la base de datos para crear o recuperar el motivo
-       const result = await createOrGetMotivo(formData.motivo_nombre.trim(), formData.tipo_gasto);
+       // Transformamos la selección de la UI ("1.1. Falso Flete") a su valor real en BD ("Falso Flete")
+       const tipoGastoRealBD = mapearNuevoHaciaTipoGasto(formData.tipo_gasto);
+       const result = await createOrGetMotivo(formData.motivo_nombre.trim(), tipoGastoRealBD);
+       
        setFormData({
            ...formData, 
            motivo_id: result.id, 
            motivo_nombre: result.nombre 
        });
-       setStep(2); // Avanzamos a configuración SAP
+       setStep(2);
     } catch(error) {
        toast.error("Error al procesar el motivo");
     } finally {
@@ -398,16 +443,13 @@ function SapAccountManager() {
     }
   };
 
-  // ACCIÓN DE CANCELAR: Con Sistema de Limpieza (Rollback)
   const handleCancel = async () => {
-    // Si estamos creando un MAPEO NUEVO, estamos en el PASO 2, y ya se creó un Motivo...
     if (!formData.id && step === 2 && formData.motivo_id) {
-       await rollbackMotivo(formData.motivo_id); // Eliminamos el motivo huérfano en silencio
+       await rollbackMotivo(formData.motivo_id); 
     }
     setIsModalOpen(false);
   };
 
-  // ACCIÓN FINAL: Guardar Configuración SAP
   const handleSave = async () => {
     if (!formData.tipo_posicion) return toast.error("La posición SAP es obligatoria");
     try {
@@ -422,17 +464,30 @@ function SapAccountManager() {
 
   const openNew = () => {
     setStep(1);
-    setFormData({ id: null, motivo_id: '', motivo_nombre: '', tipo_gasto: 'General', tipo_posicion: '', clase_condicion: '', cuenta_contable: '' });
+    setFormData({ id: null, motivo_id: '', motivo_nombre: '', categoria_principal: '1. Gastos Adicionales', tipo_gasto: '1.1. Falso Flete', tipo_posicion: '', clase_condicion: '', cuenta_contable: '' });
     setIsModalOpen(true);
   };
 
   const openEdit = (item) => {
-    setStep(2); // La edición va directo al paso 2
+    setStep(2); 
+    
+    // Deducimos el Nivel 1 y Nivel 2 a partir del dato de la BD para mostrarlos bien en el formulario (por si retrocede)
+    const tipoGastoBD = item.motivo?.tipo_gasto || 'Falso Flete';
+    const tipoGastoUI = mapearTipoGastoHaciaNuevo(tipoGastoBD);
+    let catPrincipal = '1. Gastos Adicionales';
+    
+    Object.keys(estructuraJerarquica).forEach(cat => {
+      if(estructuraJerarquica[cat].includes(tipoGastoUI)) {
+         catPrincipal = cat;
+      }
+    });
+
     setFormData({ 
       id: item.id, 
       motivo_id: item.motivo_id, 
       motivo_nombre: item.motivo?.nombre || 'Desconocido',
-      tipo_gasto: '', 
+      categoria_principal: catPrincipal,
+      tipo_gasto: tipoGastoUI, 
       tipo_posicion: item.tipo_posicion || '', 
       clase_condicion: item.clase_condicion || '', 
       cuenta_contable: item.cuenta_contable || '' 
@@ -450,14 +505,44 @@ function SapAccountManager() {
     }
   };
 
+  // FUNCIONES DE AGRUPACIÓN PARA LA NUEVA TABLA
   const filteredMappings = mappings.filter(m => showInactives ? !m.activo : m.activo);
 
+  // Agrupamos los datos por Nivel 1 y luego por Nivel 2
+  const groupedData = {};
+  
+  Object.keys(estructuraJerarquica).forEach(nivel1 => {
+    groupedData[nivel1] = {};
+    estructuraJerarquica[nivel1].forEach(nivel2 => {
+      groupedData[nivel1][nivel2] = [];
+    });
+  });
+
+  filteredMappings.forEach(m => {
+    const tipoGastoBD = m.motivo?.tipo_gasto || 'Desconocido';
+    const tipoGastoUI = mapearTipoGastoHaciaNuevo(tipoGastoBD);
+    
+    let foundCat = false;
+    Object.keys(estructuraJerarquica).forEach(nivel1 => {
+      if(estructuraJerarquica[nivel1].includes(tipoGastoUI)) {
+        groupedData[nivel1][tipoGastoUI].push(m);
+        foundCat = true;
+      }
+    });
+
+    // Salvavidas por si hay algún motivo raro
+    if (!foundCat) {
+      if (!groupedData['Otros']) groupedData['Otros'] = { 'Otros Tipos': [] };
+      groupedData['Otros']['Otros Tipos'].push(m);
+    }
+  });
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h3 className="font-bold text-lg text-gray-900 dark:text-white">Mapeo Contable SAP</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Asocia los motivos de gasto a su estructura de cuentas para el historial de 34 columnas.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Asocia los motivos de gasto a su estructura de cuentas para el historial.</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
             <Button 
@@ -472,56 +557,88 @@ function SapAccountManager() {
         </div>
       </div>
 
-            <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 uppercase font-medium">
-            <tr>
-              <th className="px-4 py-3">Tipo de Gasto</th>
-              <th className="px-4 py-3">Motivo</th>
-              <th className="px-4 py-3">Posición SAP</th>
-              <th className="px-4 py-3">Clase Condición</th>
-              <th className="px-4 py-3">Tipo Cuenta</th>
-              <th className="px-4 py-3">Estado</th>
-              <th className="px-4 py-3 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-            {filteredMappings.map(m => (
-              <tr key={m.id} className={cn("hover:bg-gray-50 dark:hover:bg-slate-800/50", !m.activo && "opacity-60 bg-gray-50 dark:bg-slate-900/20")}>
-                <td className="px-4 py-3 text-brand-600 dark:text-brand-400 font-bold text-xs uppercase tracking-wider">
-                  {/* Aquí mostramos la familia usando el dato oculto de la API */}
-                  {m.motivo?.tipo_gasto || '---'}
-                </td>
-                <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">{m.motivo?.nombre || 'Desconocido'}</td>
-                <td className="px-4 py-3 font-mono dark:text-gray-300">{m.tipo_posicion || '---'}</td>
-                <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-400">{m.clase_condicion || '---'}</td>
-                <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-400">{m.cuenta_contable || '---'}</td>
-                <td className="px-4 py-3">
-                   {m.activo ? (
-                       <span className="text-xs font-bold text-green-600 dark:text-green-400">ACTIVO</span>
-                   ) : (
-                       <span className="text-xs font-bold text-gray-400 dark:text-gray-500">INACTIVO</span>
-                   )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                    <button onClick={() => openEdit(m)} className="p-1.5 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-brand-600 transition-colors mr-2">
-                        <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => toggleStatus(m.id, m.activo)} className="p-1.5 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-red-600 transition-colors">
-                        <Power className="w-4 h-4" />
-                    </button>
-                </td>
-              </tr>
-            ))}
-            {filteredMappings.length === 0 && (
-                <tr>
-                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                        No hay registros para mostrar.
-                    </td>
-                </tr>
-            )}
-          </tbody>
-        </table>
+      {/* RENDERIZADO DE LAS NUEVAS TABLAS AGRUPADAS */}
+      <div className="space-y-8">
+        {Object.keys(groupedData).map(nivel1 => {
+           // Verificamos si este bloque Nivel 1 tiene al menos un registro adentro para no mostrar bloques vacíos
+           let hasRecords = false;
+           Object.keys(groupedData[nivel1]).forEach(nivel2 => {
+              if (groupedData[nivel1][nivel2].length > 0) hasRecords = true;
+           });
+
+           if (!hasRecords) return null;
+
+           return (
+             <div key={nivel1} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                {/* ENCABEZADO NIVEL 1 (Categoría Principal) */}
+                <div className="bg-brand-900 dark:bg-brand-950 px-4 py-3 border-b border-brand-800">
+                   <h4 className="font-black text-white text-sm uppercase tracking-wide">{nivel1}</h4>
+                </div>
+
+                <div className="divide-y divide-gray-100 dark:divide-slate-700/50">
+                  {Object.keys(groupedData[nivel1]).map(nivel2 => {
+                    const itemsNivel3 = groupedData[nivel1][nivel2];
+                    if (itemsNivel3.length === 0) return null;
+
+                    return (
+                      <div key={nivel2}>
+                         {/* ENCABEZADO NIVEL 2 (Tipo de Gasto) */}
+                         <div className="bg-brand-50 dark:bg-brand-900/30 px-4 py-2 border-b border-brand-100 dark:border-brand-800/30">
+                            <h5 className="font-bold text-brand-700 dark:text-brand-400 text-xs uppercase tracking-wider">{nivel2}</h5>
+                         </div>
+
+                         {/* TABLA NIVEL 3 (Motivos y SAP) */}
+                         <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                              <thead className="bg-gray-50/50 dark:bg-slate-900/20 text-gray-400 dark:text-gray-500 uppercase text-[10px] font-bold">
+                                <tr>
+                                  <th className="px-4 py-2 w-1/3">Motivo (Nivel 3)</th>
+                                  <th className="px-4 py-2">Posición SAP</th>
+                                  <th className="px-4 py-2">Clase Condición</th>
+                                  <th className="px-4 py-2">Tipo Cuenta</th>
+                                  <th className="px-4 py-2">Estado</th>
+                                  <th className="px-4 py-2 text-right">Acciones</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
+                                {itemsNivel3.map(m => (
+                                  <tr key={m.id} className={cn("hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors", !m.activo && "opacity-50")}>
+                                    <td className="px-4 py-2.5 font-bold text-gray-800 dark:text-gray-200">{m.motivo?.nombre || 'Desconocido'}</td>
+                                    <td className="px-4 py-2.5 font-mono text-gray-600 dark:text-gray-400 text-xs">{m.tipo_posicion || '---'}</td>
+                                    <td className="px-4 py-2.5 font-mono text-gray-600 dark:text-gray-400 text-xs">{m.clase_condicion || '---'}</td>
+                                    <td className="px-4 py-2.5 font-mono text-gray-600 dark:text-gray-400 text-xs">{m.cuenta_contable || '---'}</td>
+                                    <td className="px-4 py-2.5">
+                                      {m.activo ? (
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400">ACTIVO</span>
+                                      ) : (
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">INACTIVO</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-right">
+                                        <button onClick={() => openEdit(m)} className="p-1.5 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-brand-600 transition-colors mr-1">
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => toggleStatus(m.id, m.activo)} className="p-1.5 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-red-600 transition-colors">
+                                            <Power className="w-4 h-4" />
+                                        </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                         </div>
+                      </div>
+                    );
+                  })}
+                </div>
+             </div>
+           );
+        })}
+        {filteredMappings.length === 0 && (
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-8 text-center">
+               <p className="text-gray-500 dark:text-gray-400">No hay registros para mostrar en esta vista.</p>
+            </div>
+        )}
       </div>
 
 
@@ -532,11 +649,10 @@ function SapAccountManager() {
       >
         <div className="pt-4">
           
-          {/* ================= PASO 1: EL MOTIVO ================= */}
           {step === 1 && !formData.id && (
             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/30">
-                  <p className="text-xs text-blue-700 dark:text-blue-300">Ingresa el nombre del motivo de gasto. Si ya existe en la base de datos, el sistema lo reconocerá automáticamente.</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">Ingresa el nombre del motivo de gasto. El sistema lo asociará automáticamente a la categoría que selecciones.</p>
               </div>
 
               <div>
@@ -548,17 +664,42 @@ function SapAccountManager() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Tipo de Gasto asociado</label>
-                <select 
-                  className="w-full h-10 rounded-md border border-gray-300 dark:border-slate-700 px-3 text-sm font-medium bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500"
-                  value={formData.tipo_gasto}
-                  onChange={e => setFormData({...formData, tipo_gasto: e.target.value})}
-                >
-                  {tiposGasto.map(tipo => (
-                    <option key={tipo} value={tipo}>{tipo}</option>
-                  ))}
-                </select>
+              <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-slate-700">
+                <p className="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">Ubicación en el formulario</p>
+                
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nivel 1 (Categoría Principal)</label>
+                  <select 
+                    className="w-full h-10 rounded-md border border-gray-300 dark:border-slate-700 px-3 text-sm font-bold bg-white dark:bg-slate-900 dark:text-white outline-none"
+                    value={formData.categoria_principal}
+                    onChange={e => {
+                       const nuevaCat = e.target.value;
+                       setFormData({
+                          ...formData, 
+                          categoria_principal: nuevaCat,
+                          // Al cambiar Nivel 1, auto-seleccionamos el primer Nivel 2 disponible de esa categoría
+                          tipo_gasto: estructuraJerarquica[nuevaCat][0] 
+                       });
+                    }}
+                  >
+                    {Object.keys(estructuraJerarquica).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="pl-4 border-l-2 border-brand-100 dark:border-brand-800/30">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nivel 2 (Tipo de Gasto)</label>
+                  <select 
+                    className="w-full h-10 rounded-md border border-gray-300 dark:border-slate-700 px-3 text-sm font-medium bg-gray-50 dark:bg-slate-800 dark:text-white outline-none"
+                    value={formData.tipo_gasto}
+                    onChange={e => setFormData({...formData, tipo_gasto: e.target.value})}
+                  >
+                    {estructuraJerarquica[formData.categoria_principal].map(tipo => (
+                      <option key={tipo} value={tipo}>{tipo}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100 dark:border-slate-700">
@@ -570,13 +711,13 @@ function SapAccountManager() {
             </div>
           )}
 
-          {/* ================= PASO 2: CONFIGURACIÓN SAP ================= */}
           {step === 2 && (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
               
               <div className="p-3 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-100 dark:border-brand-800/30">
-                 <p className="text-[10px] font-bold uppercase text-brand-700 dark:text-brand-400 tracking-wider">Motivo Seleccionado</p>
-                 <p className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">{formData.motivo_nombre}</p>
+                 <p className="text-[10px] font-bold uppercase text-brand-700 dark:text-brand-400 tracking-wider">Resumen de creación</p>
+                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formData.categoria_principal} {'>'} {formData.tipo_gasto}</p>
+                 <p className="text-base font-black text-gray-900 dark:text-white mt-1">{formData.motivo_nombre}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -607,6 +748,7 @@ function SapAccountManager() {
     </div>
   );
 }
+
 
 // --- SUB-COMPONENTE: GESTIÓN DE ZONAS Y REGLAS DE PORCENTAJE ---
 function ZonasManager() {
