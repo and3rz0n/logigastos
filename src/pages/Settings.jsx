@@ -472,11 +472,12 @@ function SapAccountManager() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
+            <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 uppercase font-medium">
             <tr>
-              <th className="px-4 py-3">Motivo de Gasto</th>
+              <th className="px-4 py-3">Tipo de Gasto</th>
+              <th className="px-4 py-3">Motivo</th>
               <th className="px-4 py-3">Posición SAP</th>
               <th className="px-4 py-3">Clase Condición</th>
               <th className="px-4 py-3">Tipo Cuenta</th>
@@ -487,6 +488,10 @@ function SapAccountManager() {
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
             {filteredMappings.map(m => (
               <tr key={m.id} className={cn("hover:bg-gray-50 dark:hover:bg-slate-800/50", !m.activo && "opacity-60 bg-gray-50 dark:bg-slate-900/20")}>
+                <td className="px-4 py-3 text-brand-600 dark:text-brand-400 font-bold text-xs uppercase tracking-wider">
+                  {/* Aquí mostramos la familia usando el dato oculto de la API */}
+                  {m.motivo?.tipo_gasto || '---'}
+                </td>
                 <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">{m.motivo?.nombre || 'Desconocido'}</td>
                 <td className="px-4 py-3 font-mono dark:text-gray-300">{m.tipo_posicion || '---'}</td>
                 <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-400">{m.clase_condicion || '---'}</td>
@@ -510,7 +515,7 @@ function SapAccountManager() {
             ))}
             {filteredMappings.length === 0 && (
                 <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                         No hay registros para mostrar.
                     </td>
                 </tr>
@@ -518,6 +523,7 @@ function SapAccountManager() {
           </tbody>
         </table>
       </div>
+
 
       <Modal 
         isOpen={isModalOpen} 
