@@ -136,7 +136,7 @@ export const getSapMappings = async () => {
       .from('configuracion_cuentas')
       .select(`
         *,
-        motivo:maestro_motivos!configuracion_cuentas_motivo_id_fkey(nombre)
+        motivo:maestro_motivos!configuracion_cuentas_motivo_id_fkey(nombre, tipo_gasto)
       `)
       .order('id', { ascending: true });
     if (error) throw error;
@@ -146,6 +146,7 @@ export const getSapMappings = async () => {
     return [];
   }
 };
+
 
 // ============================================================================
 // FUNCIONES DEL MODAL DE MAPEO SAP (DOS PASOS Y ROLLBACK)
